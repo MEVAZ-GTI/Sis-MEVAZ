@@ -9,7 +9,7 @@ Description: A Metodologia para o Cálculo de Vazões (MEVAZ) é a
     aos reservatórios no Ceará e de sua oferta hídrica de longo prazo.
 License: GPL-3
 Depends:
-    R (>= 4.5.0)
+    R (>= 4.2.0)
 Imports:
     dplyr (>= 1.1.4),
     hydrobr,
