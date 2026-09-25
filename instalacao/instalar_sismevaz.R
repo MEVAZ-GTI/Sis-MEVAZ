@@ -1,5 +1,5 @@
 ## Instala o Sis-MEVAZ, a interface interativa e todas as dependências.
-## Requer R 4.5.0 ou posterior. O instalador não depende de devtools.
+## Requer R 4.2.0 ou posterior. O instalador não depende de devtools.
 
 versao_minima <- numeric_version("4.2.0")
 versao_atual <- getRversion()
