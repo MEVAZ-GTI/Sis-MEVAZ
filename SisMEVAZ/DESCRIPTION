@@ -1,0 +1,38 @@
+Type: Package
+Package: SisMEVAZ
+Title: Metodologia de cálculo das Vazões (MEVAZ)
+Version: 0.1.0
+Authors@R: person("Ályson", "Estácio", email = "alyson.estacio@funceme.br",
+    role = c("aut", "cre"))
+Description: A Metodologia para o Cálculo de Vazões (MEVAZ) é a
+    metodologia oficial para a estimativa das séries de vazões afluentes
+    aos reservatórios no Ceará e de sua oferta hídrica de longo prazo.
+License: GPL-3
+Depends:
+    R (>= 4.5.0)
+Imports:
+    dplyr (>= 1.1.4),
+    hydrobr,
+    phylin,
+    lubridate (>= 1.9.2),
+    lwgeom (>= 0.2-13),
+    openxlsx (>= 4.2.5.2),
+    raster (>= 3.6-26),
+    RPostgreSQL (>= 0.7-5),
+    sf (>= 1.0-14),
+    stats,
+    xts (>= 0.13.1)
+Suggests:
+    bslib,
+    DT,
+    leaflet,
+    plotly,
+    remotes,
+    readxl,
+    shiny,
+    shinyjs,
+    stars,
+    whitebox
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.3.2

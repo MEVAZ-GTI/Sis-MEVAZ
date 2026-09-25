@@ -1,0 +1,156 @@
+/* Tema visual FUNCEME para a versao Shiny do MEVAZ (funceme.br) */
+
+:root {
+    --funceme-green: #00A651;
+    --funceme-green-dark: #00793C;
+    --funceme-teal: #12B0A0;
+    --funceme-orange: #F7941D;
+    --funceme-bg: #F2F6F4;
+}
+
+body {
+    background-color: var(--funceme-bg);
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* ---------- Cabecalho FUNCEME ---------- */
+
+.funceme-header {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 10px 24px;
+    min-height: 76px;
+    box-sizing: border-box;
+    background: linear-gradient(120deg, var(--funceme-teal) 0%, var(--funceme-green) 55%, var(--funceme-green-dark) 100%);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    position: relative;
+    overflow: hidden;
+}
+
+.funceme-header::after {
+    content: "";
+    position: absolute;
+    right: -5%;
+    top: 0;
+    bottom: 0;
+    width: 18%;
+    background: var(--funceme-orange);
+    transform: skewX(-18deg);
+    opacity: 0.9;
+}
+
+.funceme-logo-badge {
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 4px 10px;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    z-index: 1;
+}
+
+.funceme-logo-badge img {
+    height: 40px;
+    display: block;
+}
+
+.funceme-header-text {
+    color: #ffffff;
+    z-index: 1;
+}
+
+.funceme-header-title {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    line-height: 1.1;
+    margin: 0;
+}
+
+.funceme-header-subtitle {
+    font-size: 12.5px;
+    font-weight: 400;
+    opacity: 0.95;
+    margin: 2px 0 0 0;
+}
+
+/* ---------- Corpo: painel + carta ---------- */
+
+.mevaz-body {
+    display: flex;
+    flex-direction: row;
+    height: calc(100vh - 76px);
+}
+
+.mevaz-sidebar {
+    width: 33%;
+    padding: 18px;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.mevaz-map {
+    width: 67%;
+    height: 100%;
+}
+
+/* ---------- Caixas de etapa ---------- */
+
+.step-box {
+    border: none;
+    border-left: 5px solid var(--funceme-green);
+    padding: 16px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    background-color: #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.step-box h5 {
+    color: #333;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+/* ---------- Botoes (Bootstrap primary -> verde FUNCEME) ---------- */
+
+.btn-primary {
+    background-color: var(--funceme-green) !important;
+    border-color: var(--funceme-green-dark) !important;
+    border-radius: 20px !important;
+    font-weight: 600;
+}
+
+.btn-primary:hover, .btn-primary:focus {
+    background-color: var(--funceme-green-dark) !important;
+    border-color: var(--funceme-green-dark) !important;
+}
+
+.spinner-border {
+    color: var(--funceme-green) !important;
+}
+
+.btn-outline-danger.mevaz-reset-btn {
+    background-color: #f8d7da;
+}
+
+/* ---------- Rotulos e dicas ---------- */
+
+.mevaz-label {
+    display: block;
+    margin-bottom: 5px;
+    color: #2f3a36;
+    font-weight: 600;
+}
+
+.mevaz-hint {
+    color: #6c757d;
+    font-style: italic;
+    display: block;
+    font-size: 12.5px;
+}
+
+.mevaz-field {
+    margin-bottom: 14px;
+}

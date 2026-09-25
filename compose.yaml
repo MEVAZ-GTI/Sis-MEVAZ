@@ -1,0 +1,10 @@
+services:
+  sismevaz:
+    build:
+      context: .
+    image: sismevaz:r-4.5.3
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./dados:/opt/sismevaz/dados
+    restart: unless-stopped
