@@ -12,7 +12,6 @@ Depends:
     R (>= 4.2.0)
 Imports:
     dplyr (>= 1.1.4),
-    hydrobr,
     phylin,
     lubridate (>= 1.9.2),
     lwgeom (>= 0.2-13),
@@ -21,14 +20,17 @@ Imports:
     RPostgreSQL (>= 0.7-5),
     sf (>= 1.0-14),
     stats,
-    xts (>= 0.13.1),
+    xts (>= 0.13.1)
+Suggests:
+    hydrobr,
     bslib,
     DT,
     leaflet,
     plotly,
+    remotes,
+    readxl,
     shiny,
     shinyjs,
-    readxl,
     stars,
     whitebox
 Encoding: UTF-8
