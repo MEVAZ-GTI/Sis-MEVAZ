@@ -386,26 +386,39 @@ instalar_cran(
 
 
 ## ------------------------------------------------------------
-## 5. HYDROBR
-## ------------------------------------------------------------
-##
-## hydrobr continua fazendo parte da instalação completa.
-##
-## Ele é instalado somente DEPOIS de terra, raster e demais
-## dependências espaciais.
+## 5. GEOBR
 ## ------------------------------------------------------------
 
 cat("\n")
 cat("============================================================\n")
-cat("5. Instalando hydrobr\n")
+cat("5. Instalando geobr\n")
 cat("============================================================\n")
 
+instalar_cran(
+  "geobr",
+  obrigatorios = TRUE
+)
+
+cat(
+  "[OK] geobr instalado: ",
+  as.character(packageVersion("geobr")),
+  "\n",
+  sep = ""
+)
+
+
+## ------------------------------------------------------------
+## 6. HYDROBR
+## ------------------------------------------------------------
+
+cat("\n")
+cat("============================================================\n")
+cat("6. Instalando hydrobr\n")
+cat("============================================================\n")
 
 if (!requireNamespace("hydrobr", quietly = TRUE)) {
 
-  cat(
-    "Instalando hydrobr a partir do GitHub...\n"
-  )
+  cat("Instalando hydrobr a partir do GitHub...\n")
 
   hydrobr_ok <- tryCatch({
 
@@ -449,8 +462,7 @@ if (!isTRUE(hydrobr_ok)) {
       "INSTALAÇÃO INTERROMPIDA\n",
       "============================================================\n\n",
       "O pacote 'hydrobr' não pôde ser instalado.\n\n",
-      "O Sis-MEVAZ utiliza o hydrobr para a obtenção e atualização\n",
-      "das séries pluviométricas das estações.\n\n",
+      "O pacote 'geobr' foi instalado/verificado antes desta etapa.\n",
       "Verifique a mensagem acima para identificar a dependência\n",
       "que impediu a instalação.\n"
     ),
@@ -458,14 +470,8 @@ if (!isTRUE(hydrobr_ok)) {
   )
 }
 
-
-cat(
-  "[OK] hydrobr instalado.\n"
-)
-
-
 ## ------------------------------------------------------------
-## 6. PHYLIN
+## 7. PHYLIN
 ## ------------------------------------------------------------
 
 cat("\n")
@@ -481,7 +487,7 @@ instalar_cran(
 
 
 ## ------------------------------------------------------------
-## 7. INSTALAR O PACOTE SISMEVAZ
+## 8. INSTALAR O PACOTE SISMEVAZ
 ## ------------------------------------------------------------
 ##
 ## IMPORTANTE:
@@ -510,7 +516,7 @@ remotes::install_local(
 
 
 ## ------------------------------------------------------------
-## 8. VERIFICAR WHITEBOXTOOLS
+## . VERIFICAR WHITEBOXTOOLS
 ## ------------------------------------------------------------
 
 cat("\n")
@@ -571,7 +577,7 @@ cat("[OK] WhiteboxTools disponível.\n")
 
 
 ## ------------------------------------------------------------
-## 9. VERIFICAÇÃO FINAL
+## 10. VERIFICAÇÃO FINAL
 ## ------------------------------------------------------------
 
 cat("\n")
