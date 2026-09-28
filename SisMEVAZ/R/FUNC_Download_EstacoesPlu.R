@@ -13,6 +13,18 @@
 #' @export
 Download_estacoesPlu<-function(est_down, ano_i, ano_f){
 
+  if (!requireNamespace("hydrobr", quietly = TRUE)) {
+    stop(
+      paste0(
+        "A atualização das estações pluviométricas não está disponível ",
+        "porque o pacote 'hydrobr' não está instalado.\n\n",
+        "O restante do Sis-MEVAZ continua disponível normalmente.\n",
+        "Para habilitar novamente a atualização da pluviometria, ",
+        "instale o pacote 'hydrobr'."
+      ),
+      call. = FALSE
+    )
+  }
   est_ce <- hydrobr::inventory(states = "CEARÁ",stationType = "plu")
   datas  <- seq(as.Date(paste0(ano_i,"-01-01")),as.Date(paste0(ano_f,"-12-01")), by="months")
 
