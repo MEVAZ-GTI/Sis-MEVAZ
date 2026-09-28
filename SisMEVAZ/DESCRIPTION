@@ -21,16 +21,14 @@ Imports:
     RPostgreSQL (>= 0.7-5),
     sf (>= 1.0-14),
     stats,
-    xts (>= 0.13.1)
-Suggests:
+    xts (>= 0.13.1),
     bslib,
     DT,
     leaflet,
     plotly,
-    remotes,
-    readxl,
     shiny,
     shinyjs,
+    readxl,
     stars,
     whitebox
 Encoding: UTF-8
