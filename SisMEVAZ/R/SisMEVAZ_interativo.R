@@ -10,7 +10,7 @@
 #'
 #' @return Retorna invisivelmente o resultado de [shiny::runApp()].
 #' @export
-SisMEVAZ_interativo <- function(diretorio_de_dados = getwd(),
+SisMEVAZ_interativo <- function(diretorio_de_dados = paste0(getwd(),"/../../dados"),
                                 navegador = TRUE,
                                 porta = 8082,
                                 endereco = "127.0.0.1") {
@@ -33,9 +33,9 @@ SisMEVAZ_interativo <- function(diretorio_de_dados = getwd(),
   diretorio_de_dados <- normalizePath(
     diretorio_de_dados, winslash = "/", mustWork = TRUE
   )
-  if (!dir.exists(file.path(diretorio_de_dados, "dados"))) {
+  if (!dir.exists(diretorio_de_dados)) {
     stop(
-      "A pasta 'dados' não foi encontrada em: ", diretorio_de_dados,
+      "A pasta 'dados' não foi encontrada em ",
       call. = FALSE
     )
   }
