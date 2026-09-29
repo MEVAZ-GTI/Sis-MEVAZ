@@ -407,68 +407,41 @@ cat(
 )
 
 
-## ------------------------------------------------------------
-## 6. HYDROBR
-## ------------------------------------------------------------
-
-cat("\n")
-cat("============================================================\n")
-cat("6. Instalando hydrobr\n")
+cat("\n============================================================\n")
+cat("6. HYDROBR\n")
 cat("============================================================\n")
 
-if (!requireNamespace("hydrobr", quietly = TRUE)) {
+hydrobr_ok <- FALSE
+
+tryCatch({
 
   cat("Instalando hydrobr a partir do GitHub...\n")
 
-  hydrobr_ok <- tryCatch({
-
-    remotes::install_github(
-      "lhmet/hydrobr@4b9c752e6c5a3e06267785aa0ad5e35b67e20241",
-      dependencies = "hard",
-      upgrade = "never"
-    )
-
-    requireNamespace(
-      "hydrobr",
-      quietly = TRUE
-    )
-
-  }, error = function(e) {
-
-    cat(
-      "\n[ERRO] Falha na instalação do hydrobr:\n",
-      conditionMessage(e),
-      "\n",
-      sep = ""
-    )
-
-    FALSE
-  })
-
-} else {
-
-  hydrobr_ok <- TRUE
-
-  cat("[OK] hydrobr já está instalado.\n")
-}
-
-
-if (!isTRUE(hydrobr_ok)) {
-
-  stop(
-    paste0(
-      "\n",
-      "============================================================\n",
-      "INSTALAÇÃO INTERROMPIDA\n",
-      "============================================================\n\n",
-      "O pacote 'hydrobr' não pôde ser instalado.\n\n",
-      "O pacote 'geobr' foi instalado/verificado antes desta etapa.\n",
-      "Verifique a mensagem acima para identificar a dependência\n",
-      "que impediu a instalação.\n"
-    ),
-    call. = FALSE
+  remotes::install_github(
+    "lhmet/hydrobr@4b9c752e6c5a3e06267785aa0ad5e35b67e20241",
+    dependencies = "hard",
+    upgrade = "never"
   )
+
+  hydrobr_ok <- requireNamespace("hydrobr", quietly = TRUE)
+
+}, error = function(e) {
+
+  cat("\n")
+  cat("[AVISO] Não foi possível instalar o hydrobr.\n")
+  cat("[AVISO] A instalação do Sis-MEVAZ continuará sem o hydrobr.\n")
+  cat("[AVISO] Motivo: ", conditionMessage(e), "\n", sep = "")
+
+})
+
+if (hydrobr_ok) {
+  cat("[OK] hydrobr instalado com sucesso.\n")
+} else {
+  cat("[AVISO] hydrobr não está disponível nesta instalação.\n")
 }
+
+
+
 
 ## ------------------------------------------------------------
 ## 7. PHYLIN
@@ -606,7 +579,6 @@ necessarios <- c(
   "openxlsx",
   "RPostgreSQL",
   "xts",
-  "hydrobr",
   "phylin"
 )
 
@@ -642,6 +614,11 @@ if (!nzchar(system.file("shiny", package = "SisMEVAZ"))) {
   )
 }
 
+if (!hydrobr_ok) {
+  cat("\n")
+  cat("[AVISO] O Sis-MEVAZ foi instalado sem o pacote hydrobr.\n")
+  cat("[AVISO] Funcionalidades que dependem do hydrobr não estarão disponíveis.\n")
+}
 
 ## ------------------------------------------------------------
 ## SUCESSO
