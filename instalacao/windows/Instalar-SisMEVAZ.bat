@@ -1,154 +1,99 @@
 @echo off
-setlocal EnableExtensions
-
-title Instalacao do Sis-MEVAZ
-
-REM ============================================================
-REM CONFIGURACAO
-REM ============================================================
-
-set "RSCRIPT_EXE="
-
-cd /d "%~dp0...."
+setlocal
 
 echo.
 echo ============================================================
-echo                   Instalacao do Sis-MEVAZ
+echo              INSTALACAO DO SIS-MEVAZ
 echo ============================================================
 echo.
 
-REM ============================================================
-REM 1. VALIDAR ESTRUTURA DO PACOTE
-REM ============================================================
+REM ------------------------------------------------------------
+REM 1. Tentar localizar Rscript no PATH
+REM ------------------------------------------------------------
 
-if not exist "%~dp0..\instalar_sismevaz.R" (
-echo [ERRO] O arquivo instalar_sismevaz.R nao foi encontrado.
+where Rscript >nul 2>&1
+
+if %ERRORLEVEL% EQU 0 (
+    set "RSCRIPT_EXE=Rscript"
+    goto R_FOUND
+)
+
+REM ------------------------------------------------------------
+REM 2. Procurar instalacoes do R no perfil do usuario
+REM ------------------------------------------------------------
+
+for /f "delims=" %%R in ('dir /b /ad "%LOCALAPPDATA%\Programs\R\R-*" 2^>nul') do (
+    if exist "%LOCALAPPDATA%\Programs\R\%%R\bin\Rscript.exe" (
+        set "RSCRIPT_EXE=%LOCALAPPDATA%\Programs\R\%%R\bin\Rscript.exe"
+        goto R_FOUND
+    )
+)
+
+REM ------------------------------------------------------------
+REM 3. Procurar instalacoes do R em Program Files
+REM ------------------------------------------------------------
+
+for /f "delims=" %%R in ('dir /b /ad "%ProgramFiles%\R\R-*" 2^>nul') do (
+    if exist "%ProgramFiles%\R\%%R\bin\Rscript.exe" (
+        set "RSCRIPT_EXE=%ProgramFiles%\R\%%R\bin\Rscript.exe"
+        goto R_FOUND
+    )
+)
+
+echo [ERRO] Rscript nao foi encontrado.
 echo.
-echo Caminho esperado:
-echo %~dp0..\instalar_sismevaz.R
+echo Instale o R antes de continuar.
 echo.
 pause
 exit /b 1
-)
 
-echo Estrutura do pacote: OK
-echo.
 
-REM ============================================================
-REM 2. LOCALIZAR Rscript
-REM ============================================================
+:R_FOUND
 
-echo Procurando o R instalado...
-echo.
-
-REM ------------------------------------------------------------
-REM Primeiro: Rscript disponivel no PATH
-REM ------------------------------------------------------------
-
-for /f "delims=" %%R in ('where Rscript 2^>nul') do (
-if not defined RSCRIPT_EXE set "RSCRIPT_EXE=%%R"
-)
-
-REM ------------------------------------------------------------
-REM Segundo: instalacao padrao do R para o usuario
-REM ------------------------------------------------------------
-
-if not defined RSCRIPT_EXE if exist "%LOCALAPPDATA%\Programs\R" (
-for /d %%D in ("%LOCALAPPDATA%\Programs\R\R-*") do (
-if exist "%%D\bin\x64\Rscript.exe" (
-set "RSCRIPT_EXE=%%D\bin\x64\Rscript.exe"
-)
-)
-)
-
-REM ------------------------------------------------------------
-REM Terceiro: Program Files
-REM ------------------------------------------------------------
-
-if not defined RSCRIPT_EXE if exist "%ProgramFiles%\R" (
-for /d %%D in ("%ProgramFiles%\R\R-*") do (
-if exist "%%D\bin\x64\Rscript.exe" (
-set "RSCRIPT_EXE=%%D\bin\x64\Rscript.exe"
-)
-)
-)
-
-REM ------------------------------------------------------------
-REM Verificar se encontramos R
-REM ------------------------------------------------------------
-
-if not defined RSCRIPT_EXE goto R_MISSING
-
-echo R encontrado:
+echo Rscript detectado:
 echo %RSCRIPT_EXE%
 echo.
 
-REM ============================================================
-REM 3. INSTALAR
-REM ============================================================
+REM ------------------------------------------------------------
+REM Verificar instalador
+REM ------------------------------------------------------------
 
-echo ============================================================
-echo              Instalando o Sis-MEVAZ
-echo ============================================================
+if not exist "%~dp0..\instalar_sismevaz.R" (
+    echo [ERRO] O arquivo instalar_sismevaz.R nao foi encontrado.
+    echo.
+    echo Local esperado:
+    echo %~dp0..\instalar_sismevaz.R
+    echo.
+    pause
+    exit /b 1
+)
+
+REM ------------------------------------------------------------
+REM Executar instalador
+REM ------------------------------------------------------------
+
+echo Iniciando instalacao...
 echo.
 
 "%RSCRIPT_EXE%" --vanilla "%~dp0..\instalar_sismevaz.R"
 
-if errorlevel 1 (
-echo.
-echo ============================================================
-echo [ERRO] A instalacao nao foi concluida.
-echo ============================================================
-echo.
-echo R utilizado:
-echo %RSCRIPT_EXE%
-echo.
-pause
-exit /b 1
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo ============================================================
+    echo [ERRO] A instalacao do Sis-MEVAZ falhou.
+    echo ============================================================
+    echo.
+    pause
+    exit /b %ERRORLEVEL%
 )
 
-REM ============================================================
-REM 4. CONCLUSAO
-REM ============================================================
-
 echo.
 echo ============================================================
-echo              INSTALACAO CONCLUIDA
+echo       Instalacao do Sis-MEVAZ concluida com sucesso!
 echo ============================================================
 echo.
-echo R utilizado:
-echo %RSCRIPT_EXE%
-echo.
-echo O Sis-MEVAZ foi instalado.
-echo.
-echo Para executar a interface, utilize:
-echo abrir_interface\windows\Abrir-SisMEVAZ.bat
+echo O pacote foi instalado na biblioteca do usuario.
 echo.
 
 pause
 exit /b 0
-
-REM ============================================================
-REM R NAO ENCONTRADO
-REM ============================================================
-
-:R_MISSING
-
-echo.
-echo ============================================================
-echo [ERRO] O R nao foi encontrado neste computador.
-echo ============================================================
-echo.
-echo O R deve estar instalado antes de executar este instalador.
-echo.
-echo Locais pesquisados:
-echo.
-echo   - Rscript disponivel no PATH
-echo   - %LOCALAPPDATA%\Programs\R
-echo   - %ProgramFiles%\R
-echo.
-echo Verifique a instalacao do R e tente novamente.
-echo.
-
-pause
-exit /b 1
