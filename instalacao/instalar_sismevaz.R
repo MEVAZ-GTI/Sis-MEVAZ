@@ -727,27 +727,143 @@ instalar_cran(
 )
 
 
-## ------------------------------------------------------------
-## 5. GEOBR
-## ------------------------------------------------------------
-
 cat("\n")
 cat("============================================================\n")
 cat("5. Instalando geobr\n")
 cat("============================================================\n")
 
+## ------------------------------------------------------------
+## O geobr atual pode exigir uma versão de R mais nova.
+##
+## Para manter o instalador compatível com versões antigas
+## do R, usamos automaticamente uma versão anterior do geobr
+## quando necessário.
+## ------------------------------------------------------------
 
-instalar_cran(
-  "geobr",
-  obrigatorios = TRUE
-)
+geobr_ok <- FALSE
 
+if (requireNamespace("geobr", quietly = TRUE)) {
+
+  geobr_ok <- TRUE
+
+  cat(
+    "[OK] geobr já está instalado: ",
+    as.character(packageVersion("geobr")),
+    "\n",
+    sep = ""
+  )
+
+} else {
+
+  versao_r <- getRversion()
+
+  if (versao_r >= "4.4.0") {
+
+    cat(
+      "R >= 4.4.0 detectado.\n"
+    )
+
+    cat(
+      "Instalando a versão atual do geobr...\n"
+    )
+
+    geobr_ok <- tryCatch({
+
+      utils::install.packages(
+        "geobr",
+        lib = lib_instalacao,
+        repos = repo,
+        dependencies = TRUE,
+        type = pkg_type
+      )
+
+      requireNamespace(
+        "geobr",
+        quietly = TRUE
+      )
+
+    }, error = function(e) {
+
+      cat(
+        "\n[ERRO] Falha na instalação do geobr:\n",
+        conditionMessage(e),
+        "\n",
+        sep = ""
+      )
+
+      FALSE
+    })
+
+  } else {
+
+    cat(
+      "R ",
+      as.character(versao_r),
+      " detectado.\n",
+      sep = ""
+    )
+
+    cat(
+      "A versão atual do geobr requer R >= 4.4.0.\n"
+    )
+
+    cat(
+      "Instalando automaticamente geobr 1.9.1,\n"
+    )
+
+    cat(
+      "compatível com versões anteriores do R...\n"
+    )
+
+    geobr_url <- paste0(
+      "https://cran.r-project.org/src/contrib/Archive/geobr/",
+      "geobr_1.9.1.tar.gz"
+    )
+
+    geobr_ok <- tryCatch({
+
+      remotes::install_url(
+        geobr_url,
+        lib = lib_instalacao,
+        dependencies = TRUE,
+        upgrade = "never"
+      )
+
+      requireNamespace(
+        "geobr",
+        quietly = TRUE
+      )
+
+    }, error = function(e) {
+
+      cat(
+        "\n[ERRO] Falha na instalação do geobr 1.9.1:\n",
+        conditionMessage(e),
+        "\n",
+        sep = ""
+      )
+
+      FALSE
+    })
+  }
+}
+
+if (!isTRUE(geobr_ok)) {
+
+  stop(
+    paste0(
+      "Não foi possível instalar uma versão compatível ",
+      "do pacote geobr para o R ",
+      as.character(getRversion()),
+      "."
+    ),
+    call. = FALSE
+  )
+}
 
 cat(
   "[OK] geobr instalado: ",
-  as.character(
-    packageVersion("geobr")
-  ),
+  as.character(packageVersion("geobr")),
   "\n",
   sep = ""
 )
