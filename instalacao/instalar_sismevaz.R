@@ -1006,7 +1006,7 @@ sismevaz_instalado <- tryCatch({
 })
 
 
-if (!sisMEVAZ_instalado ||
+if (!sismevaz_instalado ||
     !requireNamespace("SisMEVAZ", quietly = TRUE)) {
 
   stop(
