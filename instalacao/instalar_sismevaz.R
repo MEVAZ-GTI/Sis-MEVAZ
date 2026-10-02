@@ -6,14 +6,20 @@
 ##   - dependências do núcleo
 ##   - dependências da interface
 ##   - terra/raster
-##   - hydrobr
+##   - geobr
+##   - hydrobr (opcional)
 ##   - phylin
 ##   - pacote SisMEVAZ
 ##   - WhiteboxTools
 ##
-## Não seleciona nem exige uma versão específica do R.
-## No Windows, prioriza pacotes binários para evitar compilação
-## desnecessária de pacotes espaciais como terra.
+## Características:
+##   - não exige uma versão específica do R
+##   - detecta automaticamente a versão do R em execução
+##   - utiliza biblioteca pessoal do usuário
+##   - não exige sudo no Linux
+##   - não altera permanentemente a configuração do R
+##   - no Windows prioriza pacotes binários
+##   - hydrobr é opcional
 ## ============================================================
 
 
@@ -57,6 +63,7 @@ if (length(arquivo_arg)) {
 pkg_dir <- file.path(projeto_dir, "SisMEVAZ")
 
 if (!dir.exists(pkg_dir)) {
+
   stop(
     paste0(
       "Pasta 'SisMEVAZ' não encontrada em:\n",
@@ -70,39 +77,319 @@ if (!dir.exists(pkg_dir)) {
 
 
 ## ------------------------------------------------------------
-## CONFIGURAÇÃO DO REPOSITÓRIO
+## CONFIGURAÇÃO DO SISTEMA
 ## ------------------------------------------------------------
 
 repo <- "https://cloud.r-project.org"
 
-is_windows <- identical(.Platform$OS.type, "windows")
+is_windows <- identical(
+  .Platform$OS.type,
+  "windows"
+)
 
 if (is_windows) {
+
   pkg_type <- "binary"
+
 } else {
+
   pkg_type <- getOption("pkgType")
+
 }
 
 
-cat("R utilizado: ", R.version.string, "\n", sep = "")
-cat("Sistema: ", R.version$platform, "\n", sep = "")
+cat(
+  "R utilizado: ",
+  R.version.string,
+  "\n",
+  sep = ""
+)
+
+cat(
+  "R_HOME:      ",
+  R.home(),
+  "\n",
+  sep = ""
+)
+
+cat(
+  "Sistema:     ",
+  R.version$platform,
+  "\n",
+  sep = ""
+)
 
 if (is_windows) {
+
   cat("Modo de instalação no Windows: BINÁRIO\n")
+
 } else {
-  cat("Modo de instalação: ", pkg_type, "\n", sep = "")
+
+  cat(
+    "Modo de instalação: ",
+    pkg_type,
+    "\n",
+    sep = ""
+  )
+
 }
 
 cat("\n")
 
 
 ## ------------------------------------------------------------
-## FUNÇÃO AUXILIAR
+## CONFIGURAR BIBLIOTECA PESSOAL DO USUÁRIO
+## ------------------------------------------------------------
+##
+## O instalador NÃO deve depender de:
+##
+##   /usr/local/lib/R/site-library
+##
+## nem exigir privilégios administrativos.
+##
+## Primeiro utiliza R_LIBS_USER, que é o mecanismo padrão
+## do R para bibliotecas pessoais.
+##
+## Caso R_LIBS_USER esteja vazio, é criado um caminho
+## equivalente ao padrão do R para a versão/plataforma
+## atualmente em execução.
 ## ------------------------------------------------------------
 
-instalar_cran <- function(pkgs,
-                           obrigatorios = TRUE,
-                           tipo = pkg_type) {
+configurar_biblioteca_usuario <- function() {
+
+  lib_usuario <- Sys.getenv(
+    "R_LIBS_USER",
+    unset = ""
+  )
+
+  ## ----------------------------------------------------------
+  ## Caso normal: R já forneceu R_LIBS_USER.
+  ## ----------------------------------------------------------
+
+  if (nzchar(lib_usuario)) {
+
+    ## Em algumas configurações R_LIBS_USER pode conter
+    ## múltiplos caminhos. Utilizamos o primeiro.
+    separador <- .Platform$path.sep
+
+    lib_usuario <- strsplit(
+      lib_usuario,
+      split = separador,
+      fixed = TRUE
+    )[[1L]][1L]
+
+    lib_usuario <- path.expand(lib_usuario)
+
+  } else {
+
+    ## --------------------------------------------------------
+    ## Fallback.
+    ##
+    ## R >= 4.2 normalmente já define R_LIBS_USER no startup.
+    ## Este bloco existe para instalações incomuns nas quais
+    ## essa variável esteja vazia.
+    ## --------------------------------------------------------
+
+    versao_r <- paste(
+      R.version$major,
+      R.version$minor,
+      sep = "."
+    )
+
+    if (is_windows) {
+
+      localappdata <- Sys.getenv(
+        "LOCALAPPDATA",
+        unset = ""
+      )
+
+      if (!nzchar(localappdata)) {
+        localappdata <- path.expand("~")
+      }
+
+      ## R para Windows ARM utiliza uma biblioteca específica.
+      if (grepl(
+        "aarch64",
+        R.version$platform,
+        ignore.case = TRUE
+      )) {
+
+        pasta_plataforma <- "aarch64-library"
+
+      } else {
+
+        pasta_plataforma <- "win-library"
+
+      }
+
+      lib_usuario <- file.path(
+        localappdata,
+        "R",
+        pasta_plataforma,
+        versao_r
+      )
+
+    } else {
+
+      lib_usuario <- file.path(
+        path.expand("~"),
+        "R",
+        paste0(
+          R.version$platform,
+          "-library"
+        ),
+        versao_r
+      )
+    }
+  }
+
+
+  ## ----------------------------------------------------------
+  ## Criar biblioteca se necessário.
+  ## ----------------------------------------------------------
+
+  if (!dir.exists(lib_usuario)) {
+
+    ok_criacao <- tryCatch(
+
+      dir.create(
+        lib_usuario,
+        recursive = TRUE,
+        showWarnings = FALSE
+      ),
+
+      error = function(e) FALSE
+
+    )
+
+    if (!isTRUE(ok_criacao) &&
+        !dir.exists(lib_usuario)) {
+
+      stop(
+        paste0(
+          "Não foi possível criar a biblioteca pessoal do usuário:\n",
+          lib_usuario,
+          "\n\n",
+          "O instalador não pode continuar sem uma biblioteca ",
+          "gravável."
+        ),
+        call. = FALSE
+      )
+    }
+  }
+
+
+  ## ----------------------------------------------------------
+  ## Verificar se realmente podemos escrever nela.
+  ## ----------------------------------------------------------
+
+  teste <- file.path(
+    lib_usuario,
+    ".sismevaz_write_test"
+  )
+
+  escrita_ok <- tryCatch({
+
+    ok <- file.create(teste)
+
+    if (file.exists(teste)) {
+      unlink(teste)
+    }
+
+    isTRUE(ok)
+
+  }, error = function(e) {
+
+    FALSE
+
+  })
+
+
+  if (!isTRUE(escrita_ok)) {
+
+    stop(
+      paste0(
+        "A biblioteca pessoal do usuário não possui ",
+        "permissão de escrita:\n",
+        lib_usuario,
+        "\n\n",
+        "O instalador não pode continuar."
+      ),
+      call. = FALSE
+    )
+  }
+
+
+  ## ----------------------------------------------------------
+  ## Colocar a biblioteca pessoal no início de .libPaths().
+  ##
+  ## Isto vale somente para esta execução do instalador.
+  ## Não altera permanentemente a configuração do usuário.
+  ## ----------------------------------------------------------
+
+  .libPaths(
+    unique(
+      c(
+        lib_usuario,
+        .libPaths()
+      )
+    )
+  )
+
+
+  ## ----------------------------------------------------------
+  ## Verificação final.
+  ## ----------------------------------------------------------
+
+  if (!lib_usuario %in% .libPaths()) {
+
+    stop(
+      paste0(
+        "Não foi possível adicionar a biblioteca pessoal ",
+        "à sessão atual do R:\n",
+        lib_usuario
+      ),
+      call. = FALSE
+    )
+  }
+
+
+  lib_usuario
+}
+
+
+lib_instalacao <- configurar_biblioteca_usuario()
+
+
+cat(
+  "Biblioteca de instalação: ",
+  lib_instalacao,
+  "\n",
+  sep = ""
+)
+
+cat(
+  "Bibliotecas R ativas:\n"
+)
+
+cat(
+  paste(
+    .libPaths(),
+    collapse = "\n"
+  ),
+  "\n\n",
+  sep = ""
+)
+
+
+## ------------------------------------------------------------
+## FUNÇÃO AUXILIAR PARA INSTALAÇÃO DO CRAN
+## ------------------------------------------------------------
+
+instalar_cran <- function(
+    pkgs,
+    obrigatorios = TRUE,
+    tipo = pkg_type) {
 
   pkgs <- unique(pkgs)
 
@@ -127,16 +414,30 @@ instalar_cran <- function(pkgs,
     return(invisible(TRUE))
   }
 
+
   cat("\n")
   cat("------------------------------------------------------------\n")
   cat("Instalando pacotes:\n")
-  cat(paste(ausentes, collapse = ", "), "\n")
+  cat(
+    paste(
+      ausentes,
+      collapse = ", "
+    ),
+    "\n"
+  )
+  cat("Biblioteca destino:\n")
+  cat(
+    lib_instalacao,
+    "\n"
+  )
   cat("------------------------------------------------------------\n")
+
 
   resultado <- tryCatch({
 
     utils::install.packages(
       ausentes,
+      lib = lib_instalacao,
       repos = repo,
       dependencies = TRUE,
       type = tipo
@@ -157,6 +458,10 @@ instalar_cran <- function(pkgs,
   })
 
 
+  ## ----------------------------------------------------------
+  ## Verificar individualmente quais pacotes ainda faltam.
+  ## ----------------------------------------------------------
+
   ainda_ausentes <- ausentes[
     !vapply(
       ausentes,
@@ -171,20 +476,40 @@ instalar_cran <- function(pkgs,
 
     mensagem <- paste0(
       "Não foi possível instalar os seguintes pacotes:\n",
-      paste(ainda_ausentes, collapse = ", ")
+      paste(
+        ainda_ausentes,
+        collapse = ", "
+      )
     )
 
+
     if (obrigatorios) {
-      stop(mensagem, call. = FALSE)
+
+      stop(
+        mensagem,
+        call. = FALSE
+      )
+
     } else {
-      warning(mensagem, call. = FALSE)
-      return(invisible(FALSE))
+
+      warning(
+        mensagem,
+        call. = FALSE
+      )
+
+      return(
+        invisible(FALSE)
+      )
     }
   }
 
+
   cat(
     "[OK] Dependências instaladas: ",
-    paste(ausentes, collapse = ", "),
+    paste(
+      ausentes,
+      collapse = ", "
+    ),
     "\n",
     sep = ""
   )
@@ -202,6 +527,7 @@ cat("============================================================\n")
 cat("1. Preparando ferramenta de instalação\n")
 cat("============================================================\n")
 
+
 instalar_cran(
   "remotes",
   obrigatorios = TRUE
@@ -212,13 +538,13 @@ instalar_cran(
 ## 2. TERRA
 ## ------------------------------------------------------------
 ##
-## Esta etapa é deliberadamente feita ANTES do hydrobr.
+## Esta etapa é feita antes das demais dependências.
 ##
-## No Windows usamos explicitamente o binário correspondente
-## ao R em execução.
+## Windows:
+##   usa binário correspondente ao R em execução.
 ##
-## Isso evita que install.packages/remotes escolha uma versão
-## fonte mais nova e tente compilá-la com Rtools.
+## Linux/macOS:
+##   utiliza o tipo de pacote definido pelo R.
 ## ------------------------------------------------------------
 
 cat("\n")
@@ -227,7 +553,10 @@ cat("2. Instalando terra\n")
 cat("============================================================\n")
 
 
-if (!requireNamespace("terra", quietly = TRUE)) {
+if (!requireNamespace(
+  "terra",
+  quietly = TRUE
+)) {
 
   if (is_windows) {
 
@@ -235,14 +564,17 @@ if (!requireNamespace("terra", quietly = TRUE)) {
       "Instalando terra como pacote binário para o R atual...\n"
     )
 
+
     terra_ok <- tryCatch({
 
       utils::install.packages(
         "terra",
+        lib = lib_instalacao,
         repos = repo,
         dependencies = TRUE,
         type = "binary"
       )
+
 
       requireNamespace(
         "terra",
@@ -252,7 +584,8 @@ if (!requireNamespace("terra", quietly = TRUE)) {
     }, error = function(e) {
 
       cat(
-        "\n[ERRO] Não foi possível instalar terra como binário.\n",
+        "\n[ERRO] Não foi possível instalar terra ",
+        "como binário.\n",
         conditionMessage(e),
         "\n",
         sep = ""
@@ -261,19 +594,24 @@ if (!requireNamespace("terra", quietly = TRUE)) {
       FALSE
     })
 
+
   } else {
 
     cat(
-      "Instalando terra normalmente no sistema operacional...\n"
+      "Instalando terra para o sistema operacional...\n"
     )
+
 
     terra_ok <- tryCatch({
 
       utils::install.packages(
         "terra",
+        lib = lib_instalacao,
         repos = repo,
-        dependencies = TRUE
+        dependencies = TRUE,
+        type = pkg_type
       )
+
 
       requireNamespace(
         "terra",
@@ -297,7 +635,9 @@ if (!requireNamespace("terra", quietly = TRUE)) {
 
   terra_ok <- TRUE
 
-  cat("[OK] terra já está instalado.\n")
+  cat(
+    "[OK] terra já está instalado.\n"
+  )
 }
 
 
@@ -322,14 +662,16 @@ if (!isTRUE(terra_ok)) {
 
 cat(
   "[OK] terra instalado: ",
-  as.character(packageVersion("terra")),
+  as.character(
+    packageVersion("terra")
+  ),
   "\n",
   sep = ""
 )
 
 
 ## ------------------------------------------------------------
-## 3. DEPENDÊNCIAS ESPACIAIS E DO NÚCLEO
+## 3. DEPENDÊNCIAS DO NÚCLEO
 ## ------------------------------------------------------------
 
 cat("\n")
@@ -394,53 +736,113 @@ cat("============================================================\n")
 cat("5. Instalando geobr\n")
 cat("============================================================\n")
 
+
 instalar_cran(
   "geobr",
   obrigatorios = TRUE
 )
 
+
 cat(
   "[OK] geobr instalado: ",
-  as.character(packageVersion("geobr")),
+  as.character(
+    packageVersion("geobr")
+  ),
   "\n",
   sep = ""
 )
 
 
-cat("\n============================================================\n")
-cat("6. HYDROBR\n")
+## ------------------------------------------------------------
+## 6. HYDROBR
+## ------------------------------------------------------------
+##
+## hydrobr é OPCIONAL.
+##
+## Se a instalação falhar, o instalador continua.
+##
+## O pacote SisMEVAZ deve tratar as funções que dependem
+## do hydrobr separadamente.
+## ------------------------------------------------------------
+
+cat("\n")
 cat("============================================================\n")
+cat("6. Instalando hydrobr (opcional)\n")
+cat("============================================================\n")
+
 
 hydrobr_ok <- FALSE
 
-tryCatch({
 
-  cat("Instalando hydrobr a partir do GitHub...\n")
+if (requireNamespace(
+  "hydrobr",
+  quietly = TRUE
+)) {
 
-  remotes::install_github(
-    "lhmet/hydrobr@4b9c752e6c5a3e06267785aa0ad5e35b67e20241",
-    dependencies = "hard",
-    upgrade = "never"
+  hydrobr_ok <- TRUE
+
+  cat(
+    "[OK] hydrobr já está instalado.\n"
   )
 
-  hydrobr_ok <- requireNamespace("hydrobr", quietly = TRUE)
-
-}, error = function(e) {
-
-  cat("\n")
-  cat("[AVISO] Não foi possível instalar o hydrobr.\n")
-  cat("[AVISO] A instalação do Sis-MEVAZ continuará sem o hydrobr.\n")
-  cat("[AVISO] Motivo: ", conditionMessage(e), "\n", sep = "")
-
-})
-
-if (hydrobr_ok) {
-  cat("[OK] hydrobr instalado com sucesso.\n")
 } else {
-  cat("[AVISO] hydrobr não está disponível nesta instalação.\n")
+
+  tryCatch({
+
+    cat(
+      "Instalando hydrobr a partir do GitHub...\n"
+    )
+
+
+    remotes::install_github(
+      "lhmet/hydrobr@4b9c752e6c5a3e06267785aa0ad5e35b67e20241",
+      lib = lib_instalacao,
+      dependencies = "hard",
+      upgrade = "never"
+    )
+
+
+    hydrobr_ok <- requireNamespace(
+      "hydrobr",
+      quietly = TRUE
+    )
+
+
+  }, error = function(e) {
+
+    cat("\n")
+    cat(
+      "[AVISO] Não foi possível instalar o hydrobr.\n"
+    )
+
+    cat(
+      "[AVISO] A instalação do Sis-MEVAZ continuará ",
+      "sem o hydrobr.\n",
+      sep = ""
+    )
+
+    cat(
+      "[AVISO] Motivo: ",
+      conditionMessage(e),
+      "\n",
+      sep = ""
+    )
+  })
 }
 
 
+if (hydrobr_ok) {
+
+  cat(
+    "[OK] hydrobr disponível.\n"
+  )
+
+} else {
+
+  cat(
+    "[AVISO] hydrobr não está disponível nesta instalação.\n"
+  )
+}
 
 
 ## ------------------------------------------------------------
@@ -449,7 +851,7 @@ if (hydrobr_ok) {
 
 cat("\n")
 cat("============================================================\n")
-cat("6. Instalando phylin\n")
+cat("7. Instalando phylin\n")
 cat("============================================================\n")
 
 
@@ -463,46 +865,69 @@ instalar_cran(
 ## 8. INSTALAR O PACOTE SISMEVAZ
 ## ------------------------------------------------------------
 ##
-## IMPORTANTE:
+## As dependências são instaladas explicitamente acima.
 ##
-## As dependências já foram instaladas explicitamente acima.
+## Portanto:
 ##
-## Por isso usamos dependencies = FALSE aqui.
+##   dependencies = FALSE
 ##
-## Isso impede que remotes volte a resolver toda a árvore de
-## dependências e tente substituir um pacote binário funcional
-## por uma versão fonte mais recente.
+## evita que remotes tente resolver novamente toda a árvore
+## de dependências.
+##
+## A biblioteca destino é explicitamente informada.
 ## ------------------------------------------------------------
 
 cat("\n")
 cat("============================================================\n")
-cat("7. Instalando o pacote SisMEVAZ\n")
+cat("8. Instalando o pacote SisMEVAZ\n")
 cat("============================================================\n")
 
 
-remotes::install_local(
-  path = pkg_dir,
-  dependencies = FALSE,
-  upgrade = "never",
-  force = TRUE
+tryCatch({
+
+  remotes::install_local(
+    path = pkg_dir,
+    lib = lib_instalacao,
+    dependencies = FALSE,
+    upgrade = "never",
+    force = TRUE
+  )
+
+}, error = function(e) {
+
+  stop(
+    paste0(
+      "Falha na instalação do pacote SisMEVAZ.\n\n",
+      conditionMessage(e)
+    ),
+    call. = FALSE
+  )
+})
+
+
+cat(
+  "[OK] Pacote SisMEVAZ instalado.\n"
 )
 
 
 ## ------------------------------------------------------------
-## . VERIFICAR WHITEBOXTOOLS
+## 9. VERIFICAR WHITEBOXTOOLS
 ## ------------------------------------------------------------
 
 cat("\n")
 cat("============================================================\n")
-cat("8. Verificando WhiteboxTools\n")
+cat("9. Verificando WhiteboxTools\n")
 cat("============================================================\n")
 
 
 whitebox_ok <- tryCatch(
+
   isTRUE(
     whitebox::check_whitebox_binary()
   ),
+
   error = function(e) FALSE
+
 )
 
 
@@ -511,6 +936,7 @@ if (!whitebox_ok) {
   cat(
     "WhiteboxTools não encontrado. Instalando...\n"
   )
+
 
   tryCatch({
 
@@ -530,10 +956,13 @@ if (!whitebox_ok) {
 
 
 whitebox_ok <- tryCatch(
+
   isTRUE(
     whitebox::check_whitebox_binary()
   ),
+
   error = function(e) FALSE
+
 )
 
 
@@ -546,7 +975,9 @@ if (!whitebox_ok) {
 }
 
 
-cat("[OK] WhiteboxTools disponível.\n")
+cat(
+  "[OK] WhiteboxTools disponível.\n"
+)
 
 
 ## ------------------------------------------------------------
@@ -555,7 +986,7 @@ cat("[OK] WhiteboxTools disponível.\n")
 
 cat("\n")
 cat("============================================================\n")
-cat("9. Verificação final\n")
+cat("10. Verificação final\n")
 cat("============================================================\n")
 
 
@@ -599,14 +1030,26 @@ if (length(ausentes)) {
     paste0(
       "Instalação incompleta.\n\n",
       "Pacotes ausentes:\n",
-      paste(ausentes, collapse = ", ")
+      paste(
+        ausentes,
+        collapse = ", "
+      )
     ),
     call. = FALSE
   )
 }
 
 
-if (!nzchar(system.file("shiny", package = "SisMEVAZ"))) {
+## ------------------------------------------------------------
+## VERIFICAR INTERFACE SHINY
+## ------------------------------------------------------------
+
+if (!nzchar(
+  system.file(
+    "shiny",
+    package = "SisMEVAZ"
+  )
+)) {
 
   stop(
     "A interface interativa não foi incluída no pacote instalado.",
@@ -614,38 +1057,98 @@ if (!nzchar(system.file("shiny", package = "SisMEVAZ"))) {
   )
 }
 
-if (!hydrobr_ok) {
-  cat("\n")
-  cat("[AVISO] O Sis-MEVAZ foi instalado sem o pacote hydrobr.\n")
-  cat("[AVISO] Funcionalidades que dependem do hydrobr não estarão disponíveis.\n")
-}
 
 ## ------------------------------------------------------------
-## SUCESSO
+## RELATÓRIO FINAL
 ## ------------------------------------------------------------
+
+cat("\n")
+
+if (!hydrobr_ok) {
+
+  cat(
+    "[AVISO] O Sis-MEVAZ foi instalado sem o pacote hydrobr.\n"
+  )
+
+  cat(
+    "[AVISO] Funcionalidades que dependem do hydrobr ",
+    "não estarão disponíveis.\n",
+    sep = ""
+  )
+}
+
 
 cat("\n")
 cat("============================================================\n")
 cat("              INSTALAÇÃO CONCLUÍDA COM SUCESSO\n")
 cat("============================================================\n\n")
 
-cat("R:             ", R.version.string, "\n", sep = "")
+
+cat(
+  "R:             ",
+  R.version.string,
+  "\n",
+  sep = ""
+)
+
+
+cat(
+  "Biblioteca:    ",
+  lib_instalacao,
+  "\n",
+  sep = ""
+)
+
+
 cat(
   "terra:         ",
-  as.character(packageVersion("terra")),
+  as.character(
+    packageVersion("terra")
+  ),
   "\n",
   sep = ""
 )
+
+
 cat(
   "raster:        ",
-  as.character(packageVersion("raster")),
+  as.character(
+    packageVersion("raster")
+  ),
   "\n",
   sep = ""
 )
-cat("hydrobr:       OK\n")
-cat("phylin:        OK\n")
-cat("SisMEVAZ:      OK\n")
-cat("WhiteboxTools: OK\n")
-cat("Interface:     OK\n\n")
 
-cat("O Sis-MEVAZ está pronto para utilização.\n\n")
+
+cat(
+  "hydrobr:       ",
+  if (hydrobr_ok) {
+    "OK"
+  } else {
+    "não instalado"
+  },
+  "\n",
+  sep = ""
+)
+
+
+cat(
+  "phylin:        OK\n"
+)
+
+cat(
+  "SisMEVAZ:      OK\n"
+)
+
+cat(
+  "WhiteboxTools: OK\n"
+)
+
+cat(
+  "Interface:     OK\n\n"
+)
+
+
+cat(
+  "O Sis-MEVAZ está pronto para utilização.\n\n"
+)
