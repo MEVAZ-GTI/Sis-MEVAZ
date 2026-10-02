@@ -47,9 +47,29 @@ for /f "tokens=5" %%P in ('netstat -ano ^| findstr :8082 ^| findstr LISTENING') 
     taskkill /F /PID %%P >nul 2>&1
 )
 
-echo Abrindo o Sis-MEVAZ em http://localhost:8082
+echo.
+echo ============================================================
+echo                  SIS-MEVAZ
+echo ============================================================
+echo.
+echo A interface sera iniciada nesta maquina.
+echo.
+echo Acesso local:
+echo   http://127.0.0.1:8082
+echo.
+echo Acesso pela rede:
+echo   Use o IP ou hostname desta maquina na porta 8082.
+echo.
+echo Para encerrar, feche esta janela.
+echo.
 
-"%RSCRIPT_EXE%" -e "SisMEVAZ::SisMEVAZ_interativo(diretorio_de_dados=Sys.getenv('SISMEVAZ_BASE_DIR'))"
+"%RSCRIPT_EXE%" --vanilla -e "SisMEVAZ::SisMEVAZ_interativo(diretorio_de_dados=Sys.getenv('SISMEVAZ_BASE_DIR'), navegador=FALSE, porta=8082, endereco='0.0.0.0')"
+
+echo.
+echo O servidor foi encerrado.
+pause
+
+exit /b 0
 
 echo.
 echo O servidor foi encerrado.
