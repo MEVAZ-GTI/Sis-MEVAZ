@@ -26,67 +26,89 @@ normalize_id_keys <- function(keys) {
 }
 
 # ---- patch_func_selec_region: aplica o patch uma unica vez por sessao R ----
-patch_func_selec_region <- function() {
-  if (.mevaz_selec_region_patched) return(invisible())
+patched_select_region <- function(
+    AfluInc_KNN,
+    AfluInc_ML,
+    Aflu_CalLocal,
+    ModRegion,
+    RegHidro,
+    Prec_med,
+    Areas,
+    datMedReg
+) {
 
-  consol_reservoirs_file <- file.path(REDE_RES_CONS, "input", "Dados_Reservatorios.xlsx")
-  fallback_model_map <- NULL
-  if (file.exists(consol_reservoirs_file)) {
-    consol_df <- openxlsx::read.xlsx(consol_reservoirs_file, colNames = TRUE)
-    if (all(c("ID", "MODELO_REGIONALIZACAO") %in% names(consol_df))) {
-      fallback_ids <- normalize_id_keys(consol_df$ID)
-      fallback_models <- normalize_model_values(consol_df$MODELO_REGIONALIZACAO)
-      fallback_model_map <- fallback_models
-      names(fallback_model_map) <- fallback_ids
-    }
-  }
-
-  orig_select_region <- getFromNamespace("FUNC_SelecRegion", "SisMEVAZ")
-
-  patched_select_region <- function(AfluInc_KNN, AfluInc_ML, ModRegion, RegHidro, Prec_med, Areas, datMedReg) {
     ModRegion <- normalize_model_values(ModRegion)
     ids <- names(AfluInc_KNN)
 
     id_keys <- normalize_id_keys(ids)
     mod_map <- ModRegion
     mod_names <- names(ModRegion)
-    if (is.null(mod_names) || all(is.na(mod_names) | trimws(as.character(mod_names)) == "")) {
-      if (length(ModRegion) == length(ids)) {
-        mod_names <- ids
-      } else {
-        mod_names <- as.character(seq_along(ModRegion))
-      }
+
+    if (is.null(mod_names) ||
+        all(is.na(mod_names) | trimws(as.character(mod_names)) == "")) {
+
+        if (length(ModRegion) == length(ids)) {
+            mod_names <- ids
+        } else {
+            mod_names <- as.character(seq_along(ModRegion))
+        }
     }
+
     names(mod_map) <- normalize_id_keys(mod_names)
+
     aligned_mod <- unname(mod_map[id_keys])
     names(aligned_mod) <- ids
 
     if (!is.null(fallback_model_map)) {
-      need_fallback <- is.na(aligned_mod) | aligned_mod == ""
-      if (any(need_fallback)) {
-        fallback_values <- unname(fallback_model_map[id_keys[need_fallback]])
-        aligned_mod[need_fallback] <- fallback_values
-      }
+
+        need_fallback <- is.na(aligned_mod) | aligned_mod == ""
+
+        if (any(need_fallback)) {
+            fallback_values <-
+                unname(fallback_model_map[id_keys[need_fallback]])
+
+            aligned_mod[need_fallback] <- fallback_values
+        }
     }
 
-    missing_ids <- ids[is.na(aligned_mod) | aligned_mod == ""]
+    missing_ids <- ids[
+        is.na(aligned_mod) | aligned_mod == ""
+    ]
+
     if (length(missing_ids) > 0) {
-      stop(sprintf("MODELO_REGIONALIZACAO ausente para IDs: %s",
-                   paste(utils::head(missing_ids, 20), collapse = ", ")))
+        stop(sprintf(
+            "MODELO_REGIONALIZACAO ausente para IDs: %s",
+            paste(utils::head(missing_ids, 20), collapse = ", ")
+        ))
     }
 
-    allowed <- c("KNN", "ML", "Multimodelo", "Médias Regionais")
-    invalid_values <- unique(aligned_mod[!(aligned_mod %in% allowed)])
+    allowed <- c(
+        "KNN",
+        "ML",
+        "Multimodelo",
+        "Médias Regionais"
+    )
+
+    invalid_values <-
+        unique(aligned_mod[!(aligned_mod %in% allowed)])
+
     if (length(invalid_values) > 0) {
-      stop(sprintf("MODELO_REGIONALIZACAO invalido: %s", paste(invalid_values, collapse = ", ")))
+        stop(sprintf(
+            "MODELO_REGIONALIZACAO invalido: %s",
+            paste(invalid_values, collapse = ", ")
+        ))
     }
 
-    orig_select_region(AfluInc_KNN, AfluInc_ML, aligned_mod, RegHidro, Prec_med, Areas, datMedReg)
-  }
-
-  assignInNamespace("FUNC_SelecRegion", patched_select_region, ns = "SisMEVAZ")
-  .mevaz_selec_region_patched <<- TRUE
-  invisible()
+    orig_select_region(
+        AfluInc_KNN = AfluInc_KNN,
+        AfluInc_ML = AfluInc_ML,
+        Aflu_CalLocal = Aflu_CalLocal,
+        ModRegion = aligned_mod,
+        RegHidro = RegHidro,
+        Prec_med = Prec_med,
+        Areas = Areas,
+        datMedReg = datMedReg
+    )
 }
 
 # ---- run_simulation: chama SisMEVAZ_redeTeste + print_Sintese + print_Series ----
