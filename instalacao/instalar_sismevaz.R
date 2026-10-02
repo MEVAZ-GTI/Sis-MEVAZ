@@ -1021,7 +1021,7 @@ if (!sismevaz_instalado ||
 
 cat(
   "[OK] SisMEVAZ: ",
-  packageVersion("SisMEVAZ"),
+  versao_pacote("SisMEVAZ"),
   "\n",
   sep = ""
 )
