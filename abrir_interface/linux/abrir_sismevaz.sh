@@ -10,7 +10,8 @@
 #   3. Verifica se o pacote SisMEVAZ está instalado;
 #   4. Verifica a pasta de dados;
 #   5. Libera a porta 8082, se necessário;
-#   6. Inicia a interface Shiny.
+#   6. Inicia a interface Shiny na máquina atual;
+#   7. Permite acesso local e pela rede.
 #
 # ============================================================
 
@@ -96,7 +97,6 @@ if command -v lsof >/dev/null 2>&1; then
 
         kill "$OLD_PID" 2>/dev/null || true
 
-        # Pequena espera para a porta ser liberada.
         sleep 1
     fi
 
@@ -119,11 +119,21 @@ echo "============================================================"
 echo "                 SIS-MEVAZ"
 echo "============================================================"
 echo
-echo "Abrindo o Sis-MEVAZ em:"
-echo "  http://localhost:8082"
+echo "A interface será iniciada nesta máquina."
 echo
-echo "Para encerrar, feche esta janela ou interrompa o processo."
+echo "Acesso local:"
+echo "  http://127.0.0.1:8082"
+echo
+echo "Acesso pela rede:"
+echo "  Use o IP ou hostname desta máquina na porta 8082."
+echo
+echo "Para encerrar, interrompa o processo."
 echo
 
 exec "$RSCRIPT" --vanilla -e \
-    "SisMEVAZ::SisMEVAZ_interativo(diretorio_de_dados=Sys.getenv('SISMEVAZ_BASE_DIR'))"
+    "SisMEVAZ::SisMEVAZ_interativo(
+        diretorio_de_dados=Sys.getenv('SISMEVAZ_BASE_DIR'),
+        navegador=FALSE,
+        porta=8082,
+        endereco='0.0.0.0'
+    )"
