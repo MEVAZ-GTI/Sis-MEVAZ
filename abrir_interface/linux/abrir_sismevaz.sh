@@ -116,24 +116,23 @@ export SISMEVAZ_BASE_DIR="$BASE_DIR"
 
 echo
 echo "============================================================"
-echo "                 SIS-MEVAZ"
+echo "                     SIS-MEVAZ"
 echo "============================================================"
 echo
-echo "A interface será iniciada nesta máquina."
+echo "Iniciando a interface do Sis-MEVAZ..."
 echo
-echo "Acesso local:"
-echo "  http://127.0.0.1:8082"
+echo "Aguarde alguns segundos."
+echo "O navegador será aberto automaticamente."
 echo
-echo "Acesso pela rede:"
-echo "  Use o IP ou hostname desta máquina na porta 8082."
+echo "Para encerrar o Sis-MEVAZ, feche esta janela."
 echo
-echo "Para encerrar, interrompa o processo."
+echo "============================================================"
 echo
 
 exec "$RSCRIPT" --vanilla -e \
     "SisMEVAZ::SisMEVAZ_interativo(
         diretorio_de_dados=Sys.getenv('SISMEVAZ_BASE_DIR'),
-        navegador=FALSE,
+        navegador=TRUE,
         porta=8082,
         endereco='0.0.0.0'
     )"
