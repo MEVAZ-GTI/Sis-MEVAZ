@@ -21,18 +21,22 @@ ui <- bslib::page_fluid(
   title = "MEVAZ",
   shinyjs::useShinyjs(),
   tags$head(
-    tags$link(rel = "stylesheet", type = "text/css", href = "funceme_theme.css")
+    tags$link(rel = "stylesheet", type = "text/css", href = "funceme_theme.css"),
+    tags$script(src = "simulation_timer.js", defer = NA)
   ),
 
   # ---- Cabecalho institucional FUNCEME ----
   tags$div(
     class = "funceme-header",
-    tags$div(class = "funceme-logo-badge", tags$img(src = "logo_funceme.png")),
+    tags$div(class = "funceme-logo-badge",
+             tags$img(src = "logo_funceme.png", alt = "FUNCEME e Governo do Estado do Ceará")),
     tags$div(
       class = "funceme-header-text",
       tags$p("MEVAZ", class = "funceme-header-title"),
       tags$p("Metodologia para o Cálculo de Vazões — Secretaria dos Recursos Hídricos",
-             class = "funceme-header-subtitle")
+             class = "funceme-header-subtitle"),
+      tags$p("Sis-MEVAZ é um assistente de inclusão de novos reservatórios na rede de açudes do Ceará e simulação de seus impactos hidrológicos",
+             class = "funceme-header-objective")
     )
   ),
 
@@ -50,7 +54,7 @@ ui <- bslib::page_fluid(
 
       # ---- Barra e rotulo de progresso ----
       div(class = "wizard-progress-bar",
-         div(id = "wizard_progress_fill", class = "wizard-progress-fill", style = "width: 16.7%;")
+         div(id = "wizard_progress_fill", class = "wizard-progress-fill", style = "width: 0%;")
       ),
       uiOutput("wizard_progress_label"),
 
@@ -70,20 +74,17 @@ ui <- bslib::page_fluid(
         actionButton("btn_step1_next", "Validar e Avançar →", class = "btn-primary rounded-pill w-100")
       ),
 
-      # ===== ETAPA 2: Escolha do metodo =====
-      step_box("2", "Etapa 2 — Escolha o método",
-        tags$p("Como deseja definir a bacia do novo reservatório?", style = "text-align:center;"),
-        actionButton("btn_branch_a", "A — Importar meus shapefiles", class = "btn-outline-primary rounded-pill w-100 mb-2"),
-        actionButton("btn_branch_b", "B — Traçar bacia e cascata automaticamente", class = "btn-outline-primary rounded-pill w-100 mb-2"),
-        actionButton("btn_step2_back", "← Voltar", class = "btn-outline-secondary rounded-pill w-100")
-      ),
-
-      # ===== ETAPA 3: Localizacao do ponto =====
-      step_box("3", "Etapa 3 — Localização do novo açude",
-        tags$h6("Clique no mapa o local do novo açude ou digite as coordenadas e clique em 'Desenhe o Ponto'",
-               style = "text-align:center;"),
-        tags$small("O ponto é sempre encaixado no canal de drenagem (linhas azuis) mais próximo do clique.",
+      # ===== ETAPA 2: Localizacao do ponto =====
+      step_box("2", "Etapa 2 — Localização do novo açude",
+        radioButtons("location_method", "Como deseja localizar o novo açude?",
+          choices = c("Selecionar no mapa" = "map", "Informar coordenadas" = "coordinates"),
+          selected = "map", width = "100%"),
+        conditionalPanel(condition = "input.location_method == 'map'",
+          div(class = "alert alert-info", "Clique no mapa no local desejado para o barramento. Amplie o zoom para facilitar a seleção.")),
+        tags$small("O ponto é sempre encaixado no canal de drenagem (linhas azuis) mais próximo do local informado.",
                   class = "mevaz-hint", style = "display:block; text-align:center; margin-bottom:8px;"),
+        conditionalPanel(condition = "input.location_method == 'coordinates'",
+        tags$p("Informe latitude e longitude em graus decimais e clique em ‘Localizar ponto’. Use valores negativos para sul e oeste.", class = "mevaz-hint"),
         div(class = "mevaz-field",
            tags$label("Latitude:", class = "mevaz-label"),
            numericInput("input_lat", NULL, value = NA, width = "100%")
@@ -92,8 +93,17 @@ ui <- bslib::page_fluid(
            tags$label("Longitude:", class = "mevaz-label"),
            numericInput("input_lon", NULL, value = NA, width = "100%")
         ),
-        actionButton("submit_button", "Desenhe o Ponto", class = "btn-outline-primary rounded-pill w-100 mb-2"),
-        half_button_row("btn_step3_back", "← Voltar", "btn_step3_next", "Avançar →")
+        actionButton("submit_button", "Localizar ponto", class = "btn-outline-primary rounded-pill w-100 mb-2")
+        ),
+        half_button_row("btn_step2_back", "← Voltar", "btn_step2_next", "Avançar →")
+      ),
+
+      # ===== ETAPA 3: Escolha do metodo =====
+      step_box("3", "Etapa 3 - Definição da bacia do novo reservatório",
+        tags$p("Como deseja definir a bacia do novo reservatório?", style = "text-align:center;"),
+        actionButton("btn_branch_a", "A — Importar meus shapefiles", class = "btn-outline-primary rounded-pill w-100 mb-2"),
+        actionButton("btn_branch_b", "B — Traçar bacia e cascata automaticamente", class = "btn-outline-primary rounded-pill w-100 mb-2"),
+        actionButton("btn_step3_back", "← Voltar", class = "btn-outline-secondary rounded-pill w-100")
       ),
 
       # ===== ETAPA 4: Bacia e dados (depende do metodo) =====
@@ -110,9 +120,7 @@ ui <- bslib::page_fluid(
           tags$p("Método B: traçado automático.", class = "mevaz-hint"),
           actionButton("run_r_script", "Trace a Bacia", class = "btn-outline-primary rounded-pill w-100 mb-2"),
           actionButton("traca_cascata", "Trace a Cascata", class = "btn-outline-primary rounded-pill w-100 mb-2"),
-          actionButton("reset_input_b", "Resetar mapa e dados", class = "btn-outline-danger rounded-pill w-100 mevaz-reset-btn"),
-          tags$small("Limpa o mapa e apaga os shapefiles e Dados_Novos_Reservatorios da pasta input.",
-                    class = "mevaz-hint")
+          tags$small("Gere a cascata depois de traçar a bacia.", class = "mevaz-hint")
         ),
 
         # --- Metodo A: importar shapefiles ---
@@ -132,31 +140,35 @@ ui <- bslib::page_fluid(
           uiOutput("step4a_feedback")
         ),
 
+        actionButton("reset_input_b", "Resetar mapa e dados", class = "btn-outline-danger rounded-pill w-100 mevaz-reset-btn"),
         tags$div(style = "margin-top:10px;"),
         half_button_row("btn_step4_back", "← Voltar", "btn_step4_next", "Avançar →")
       ),
 
       # ===== ETAPA 5: CAV =====
       step_box("5", "Etapa 5 — CAV (Cota, Área, Volume)",
-        tags$p("Informe a curva Cota-Área-Volume e a Cota do Sangrador do novo reservatório.",
+        tags$p("Selecione o arquivo da curva Cota-Área-Volume e informe a cota do sangradouro do novo reservatório.",
               style = "text-align:center;"),
-        actionButton("cav_button", "Abrir CAV", class = "btn-outline-primary rounded-pill w-100 mb-2"),
+        actionButton("cav_button", "Importar arquivo CAV", class = "btn-outline-primary rounded-pill w-100 mb-2"),
         half_button_row("btn_step5_back", "← Voltar", "btn_step5_next", "Avançar →")
       ),
 
       # ===== ETAPA 6: Simulacao =====
       step_box("6", "Etapa 6 — Executar a simulação MEVAZ",
         actionButton("open_simula_button", "Executar Simulação MEVAZ", class = "btn-primary rounded-pill w-100 mb-2"),
-        div(style = "display:flex; gap:8px;",
-           actionButton("btn_step6_back", "← Voltar", class = "btn-outline-primary rounded-pill w-100"),
-           actionButton("reset_button", "Resetar tudo", class = "btn-outline-danger rounded-pill w-100 mevaz-reset-btn")
-        )
+        actionButton("open_results_button", "Resultados", class = "btn-outline-primary rounded-pill w-100 mb-2"),
+        actionButton("btn_step6_back", "← Voltar", class = "btn-outline-primary rounded-pill w-100")
       ),
+
+      uiOutput("wizard_requirements"),
+      uiOutput("wizard_stage_status"),
+      actionButton("reset_button", "Resetar tudo", class = "btn-outline-danger rounded-pill w-100 mevaz-reset-btn"),
 
       # Painel de status sempre visivel (independente da etapa), equivalente
       # aos divs 'clicked-coordinates'/'nearest-point-info' do Python: mostra
       # o ponto selecionado e o resultado das ultimas acoes de tracado.
-      uiOutput("point_feedback")
+      uiOutput("point_feedback"),
+      uiOutput("ponto_bloqueado_feedback")
     ),
 
     # ---- Carta (leaflet) ----

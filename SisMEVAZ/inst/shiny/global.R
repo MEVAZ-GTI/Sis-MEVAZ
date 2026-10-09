@@ -147,30 +147,27 @@ clear_previous_simulation_data()
 # ---- Modal do CAV (Cota-Area-Volume) ----
 cav_modal_ui <- function() {
   shiny::modalDialog(
-    title = "Insira Dados de Cota, Área e Volume",
+    title = "Importar curva Cota-Área-Volume (CAV)",
     size = "l",
     easyClose = FALSE,
-    shiny::fileInput("upload_cav_data", "Arraste e solte ou selecione um arquivo",
-                     accept = c(".csv", ".xlsx", ".xls")),
-    shiny::tags$hr(),
-    shiny::tags$p("Ou insira manualmente os dados:"),
-    shiny::fluidRow(
-      shiny::column(4, shiny::numericInput("cota_input", "Cota (m)", value = NA)),
-      shiny::column(4, shiny::numericInput("area_input", "Área (km²)", value = NA)),
-      shiny::column(4, shiny::numericInput("volume_input", "Volume (m³)", value = NA))
+    shiny::div(class = "cav-spillway-highlight",
+      shiny::numericInput("input_cota_sang", "Cota do sangradouro (m)", value = NA, width = "100%"),
+      shiny::tags$p("Campo obrigatório. A cota informada deve existir na tabela do arquivo CAV.")
     ),
+    shiny::fileInput("upload_cav_data", "Selecione o arquivo contendo a CAV",
+                     accept = c(".csv", ".xlsx", ".xls"), buttonLabel = "Selecionar arquivo...",
+                     placeholder = "Nenhum arquivo selecionado"),
+    shiny::tags$p("O arquivo deve conter as colunas COTA (m), AREA_KM2 (km²) e VOLUME_M3 (m³).",
+                  class = "mevaz-hint"),
     shiny::uiOutput("input_feedback"),
-    shiny::fluidRow(
-      shiny::column(12, shiny::numericInput("input_cota_sang", "Cota do Sangrador (m)", value = NA))
-    ),
     DT::DTOutput("cav_table"),
     shiny::uiOutput("save_feedback"),
+    shiny::uiOutput("cav_requirements"),
     shiny::div(
       id = "cav_graph_container", style = "display:none; margin-top:15px;",
       plotly::plotlyOutput("cav_graph")
     ),
     footer = shiny::tagList(
-      shiny::actionButton("add_data_button", "Adicionar Dados", class = "btn-primary"),
       shiny::actionButton("ver_grafico_button", "Ver Gráfico", class = "btn-primary"),
       shiny::actionButton("confirm_save_button", "Confirmar e Salvar", class = "btn-success"),
       shiny::modalButton("Fechar")
@@ -196,7 +193,9 @@ processing_modal_ui <- function(title_text) {
 # ---- Uma etapa do assistente: caixa branca com liseira verde ----
 step_box <- function(step_id, title_text, ...) {
   shiny::conditionalPanel(
-    condition = sprintf("output.wizard_step_js == '%s'", step_id),
+    # Antes da primeira resposta do servidor, a etapa inicial ja e visivel.
+    condition = sprintf("String(output.wizard_step_js || '1') === '%s'", step_id),
+    style = if (as.character(step_id) == "1") NULL else "display:none;",
     shiny::div(class = "step-box", shiny::h5(title_text), ...)
   )
 }

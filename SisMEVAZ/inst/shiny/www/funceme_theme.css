@@ -13,9 +13,18 @@ body {
     font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
 }
 
+body > .container-fluid {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    padding: 0;
+}
+
 /* ---------- Cabecalho FUNCEME ---------- */
 
 .funceme-header {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 18px;
@@ -41,6 +50,7 @@ body {
 }
 
 .funceme-logo-badge {
+    flex-shrink: 0;
     background: #ffffff;
     border-radius: 8px;
     padding: 4px 10px;
@@ -51,11 +61,14 @@ body {
 }
 
 .funceme-logo-badge img {
-    height: 40px;
+    height: 96px;
+    width: auto;
     display: block;
 }
 
 .funceme-header-text {
+    flex: 1;
+    min-width: 0;
     color: #ffffff;
     z-index: 1;
 }
@@ -75,12 +88,33 @@ body {
     margin: 2px 0 0 0;
 }
 
+.funceme-header-objective {
+    max-width: 850px;
+    margin: 8px auto 0;
+    text-align: center;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+    .funceme-header {
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 12px 16px;
+    }
+
+    .funceme-logo-badge img {
+        height: 76px;
+    }
+}
+
 /* ---------- Corpo: painel + carta ---------- */
 
 .mevaz-body {
     display: flex;
     flex-direction: row;
-    height: calc(100vh - 76px);
+    flex: 1 1 0;
+    min-height: 0;
 }
 
 .mevaz-sidebar {
@@ -96,6 +130,80 @@ body {
 }
 
 /* ---------- Caixas de etapa ---------- */
+
+.wizard-status {
+    margin-bottom: 10px;
+    padding: 8px;
+    background: #fff;
+    border: 1px solid #dce6e0;
+    border-radius: 10px;
+}
+
+.wizard-status-summary {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #2f3a36;
+}
+
+.wizard-status-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.wizard-status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px;
+    border-radius: 6px;
+}
+
+.wizard-status-item.is-current {
+    background: #edf7f1;
+    box-shadow: inset 3px 0 var(--funceme-green);
+}
+
+.wizard-status-number {
+    flex: 0 0 18px;
+    height: 18px;
+    text-align: center;
+    line-height: 18px;
+    font-size: 11px;
+    border-radius: 50%;
+    background: #edf0ee;
+    color: #49574f;
+    font-weight: 700;
+}
+
+.is-complete .wizard-status-number {
+    background: var(--funceme-green-dark);
+    color: #fff;
+}
+
+.wizard-status-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.wizard-status-heading {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.wizard-status-badge {
+    color: #59675f;
+    font-size: 11px;
+}
+
+.is-complete .wizard-status-badge {
+    color: var(--funceme-green-dark);
+}
 
 .step-box {
     border: none;
@@ -114,6 +222,31 @@ body {
 }
 
 /* ---------- Botoes (Bootstrap primary -> verde FUNCEME) ---------- */
+
+.cav-spillway-highlight {
+    padding: 16px;
+    margin-bottom: 18px;
+    border: 1px solid var(--funceme-orange);
+    border-left-width: 5px;
+    border-radius: 8px;
+    background: #fff5e7;
+}
+
+.cav-spillway-highlight label {
+    font-size: 18px;
+    font-weight: 700;
+    color: #75440d;
+}
+
+.cav-spillway-highlight input {
+    font-size: 18px;
+    border: 2px solid #b56912;
+}
+
+.cav-spillway-highlight p {
+    margin: 8px 0 0;
+    color: #75440d;
+}
 
 .btn-primary {
     background-color: var(--funceme-green) !important;
@@ -153,4 +286,88 @@ body {
 
 .mevaz-field {
     margin-bottom: 14px;
+}
+
+/* Aviso de execucao: destaque central, inclusive em telas pequenas. */
+.shiny-notification:has(.shiny-progress-notification) {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    width: min(560px, calc(100vw - 32px));
+    box-sizing: border-box;
+    padding: 22px 26px;
+    background: #fff5e7;
+    color: #75440d;
+    border: 2px solid var(--funceme-orange);
+    border-left-width: 8px;
+    border-radius: 12px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+    opacity: 1;
+}
+
+.shiny-progress-notification .progress-text .progress-message {
+    display: block;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.shiny-progress-notification .progress-text .progress-detail {
+    display: block;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.mevaz-simulation-timer {
+    margin-top: 12px;
+    font-size: 20px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.shiny-progress-notification::before {
+    content: "";
+    display: block;
+    height: 6px;
+    margin-bottom: 16px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #ffe3be 25%, #b56912 50%, #ffe3be 75%);
+    background-size: 200% 100%;
+    animation: mevaz-simulation-running 1.5s linear infinite;
+}
+
+@keyframes mevaz-simulation-running {
+    from { background-position: 200% 0; }
+    to { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .shiny-progress-notification::before { animation: none; }
+}
+
+.mevaz-results-panel { padding-top: 8px; }
+.modal-dialog:has(.mevaz-results-panel) {
+    width: calc(100% - 32px);
+    max-width: 1100px;
+}
+.mevaz-results-panel .tab-content { padding-top: 20px; }
+.mevaz-results-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin: 24px 0;
+}
+.mevaz-result-card {
+    padding: 20px;
+    border: 1px solid #c7e3d4;
+    border-top: 5px solid var(--funceme-green);
+    border-radius: 10px;
+    background: #f2f8f4;
+}
+.mevaz-result-value { font-size: 28px; font-weight: 700; color: #00793C; }
+.mevaz-result-value small { font-size: 16px; }
+.mevaz-result-card p { margin-top: 12px; }
+@media (max-width: 600px) {
+    .mevaz-results-cards { grid-template-columns: 1fr; }
 }

@@ -11,6 +11,43 @@ server <- function(input, output, session) {
   # =====================================================================
   wizard_step <- reactiveVal(1)
   wizard_branch <- reactiveVal(NULL)
+  ponto_bloqueado <- reactiveVal(FALSE)
+  etapas_concluidas <- reactiveVal(rep(FALSE, 6))
+  bacia_tracada <- reactiveVal(FALSE)
+  results_snapshot <- reactiveVal(NULL)
+  observe({
+    shinyjs::toggleState("open_results_button", condition = etapas_concluidas()[6])
+  })
+
+  marcar_etapas <- function(etapas, concluida) {
+    estado <- isolate(etapas_concluidas())
+    estado[etapas] <- concluida
+    etapas_concluidas(estado)
+  }
+
+  # Alteracoes nas entradas tornam pendentes os resultados que dependem delas.
+  observeEvent(list(input$input_cod, input$input_nomeac), {
+    marcar_etapas(c(1, 4:6), FALSE)
+    bacia_tracada(FALSE)
+  }, ignoreInit = TRUE, priority = 100)
+  observeEvent(list(input$input_mod_reg, input$input_id_jusante, input$upload_shapefile_a), {
+    marcar_etapas(4:6, FALSE)
+  }, ignoreInit = TRUE, priority = 100)
+
+  observe({
+    shinyjs::toggleState("location_method", condition = !ponto_bloqueado())
+    for (id in c("input_lat", "input_lon")) {
+      shinyjs::toggleState(id, condition = !ponto_bloqueado() && etapas_concluidas()[1] &&
+        wizard_step() == 2 && identical(input$location_method, "coordinates"))
+    }
+  })
+
+  output$ponto_bloqueado_feedback <- renderUI({
+    if (ponto_bloqueado()) {
+      div(class = "alert alert-info", role = "status",
+          "Ponto de barramento escolhido. Para alterar a localização, use o botão de reset da interface.")
+    }
+  })
 
   output$wizard_step_js <- renderText(as.character(wizard_step()))
   outputOptions(output, "wizard_step_js", suspendWhenHidden = FALSE)
@@ -18,8 +55,27 @@ server <- function(input, output, session) {
   output$wizard_branch_js <- renderText(if (is.null(wizard_branch())) "" else wizard_branch())
   outputOptions(output, "wizard_branch_js", suspendWhenHidden = FALSE)
 
-  step_labels <- c("1" = "Dados básicos", "2" = "Método", "3" = "Localização",
+  step_labels <- c("1" = "Dados básicos", "2" = "Localização", "3" = "Definição da bacia",
                    "4" = "Bacia e dados", "5" = "CAV", "6" = "Simulação")
+  output$wizard_stage_status <- renderUI({
+    concluidas <- etapas_concluidas()
+    tags$div(class = "wizard-status", role = "region", `aria-label` = "Andamento das etapas",
+      tags$p(sprintf("%d de 6 etapas concluídas", sum(concluidas)), class = "wizard-status-summary"),
+      tags$ol(class = "wizard-status-list", lapply(seq_len(6), function(i) {
+        parcial <- i == 4 && bacia_tracada() && !concluidas[i] && identical(wizard_branch(), "B")
+        status <- if (concluidas[i]) "Concluída" else if (parcial) "Em preparação" else "Pendente"
+        tags$li(class = paste("wizard-status-item", if (concluidas[i]) "is-complete" else "is-pending",
+                             if (wizard_step() == i) "is-current" else ""),
+          `aria-current` = if (wizard_step() == i) "step" else NULL,
+          tags$span(class = "wizard-status-number", if (concluidas[i]) "✓" else as.character(i), `aria-hidden` = "true"),
+          tags$div(class = "wizard-status-content",
+            tags$div(class = "wizard-status-heading", tags$span(step_labels[[as.character(i)]]),
+                     tags$span(class = "wizard-status-badge", status))
+          )
+        )
+      }))
+    )
+  })
   output$wizard_progress_label <- renderUI({
     s <- wizard_step()
     tags$div(
@@ -32,19 +88,35 @@ server <- function(input, output, session) {
   })
 
   observe({
-    pct <- wizard_step() / 6 * 100
+    pct <- sum(etapas_concluidas()) / 6 * 100
     shinyjs::runjs(sprintf("document.getElementById('wizard_progress_fill').style.width = '%.1f%%';", pct))
   })
 
-  observeEvent(input$btn_branch_a, { wizard_branch("A"); wizard_step(3) })
-  observeEvent(input$btn_branch_b, { wizard_branch("B"); wizard_step(3) })
+  escolher_metodo <- function(metodo) {
+    if (!permitir_acao("btn_branch_a")) return()
+    if (!identical(wizard_branch(), metodo)) {
+      marcar_etapas(4:6, FALSE)
+      bacia_tracada(FALSE)
+    }
+    wizard_branch(metodo)
+    marcar_etapas(3, TRUE)
+    wizard_step(4)
+  }
+  observeEvent(input$btn_branch_a, escolher_metodo("A"))
+  observeEvent(input$btn_branch_b, escolher_metodo("B"))
   observeEvent(input$btn_step2_back, wizard_step(1))
   observeEvent(input$btn_step3_back, wizard_step(2))
-  observeEvent(input$btn_step3_next, wizard_step(4))
+  observeEvent(input$btn_step2_next, {
+    if (permitir_acao("btn_step2_next")) wizard_step(3)
+  })
   observeEvent(input$btn_step4_back, wizard_step(3))
-  observeEvent(input$btn_step4_next, wizard_step(5))
+  observeEvent(input$btn_step4_next, {
+    if (permitir_acao("btn_step4_next")) wizard_step(5)
+  })
   observeEvent(input$btn_step5_back, wizard_step(4))
-  observeEvent(input$btn_step5_next, wizard_step(6))
+  observeEvent(input$btn_step5_next, {
+    if (permitir_acao("btn_step5_next")) wizard_step(6)
+  })
   observeEvent(input$btn_step6_back, wizard_step(5))
 
   # =====================================================================
@@ -63,6 +135,105 @@ server <- function(input, output, session) {
   # cascata e legitimamente vazia e o Dados_Novos so tem o novo reservatorio.
   standalone_state <- reactiveVal(FALSE)
   cav_data <- reactiveVal(data.frame(COTA = numeric(0), AREA_KM2 = numeric(0), VOLUME_M3 = numeric(0)))
+  observeEvent(list(cav_data(), input$input_cota_sang), {
+    marcar_etapas(5:6, FALSE)
+  }, ignoreInit = TRUE, priority = 100)
+  observeEvent(list(input$input_lat, input$input_lon), {
+    if (!ponto_bloqueado() && identical(input$location_method, "coordinates")) marcar_etapas(c(2, 4:6), FALSE)
+  }, ignoreInit = TRUE, priority = 100)
+
+  inteiro_valido <- function(valor) {
+    is.numeric(valor) && length(valor) == 1 && is.finite(valor) && abs(valor) <= .Machine$integer.max && valor == trunc(valor)
+  }
+  coordenadas_validas <- function() {
+    lat <- input$input_lat; lon <- input$input_lon
+    is.numeric(lat) && length(lat) == 1 && is.finite(lat) && abs(lat) <= 90 &&
+      is.numeric(lon) && length(lon) == 1 && is.finite(lon) && abs(lon) <= 180
+  }
+
+  # Uma unica regra por acao controla tanto o botao quanto a validacao no servidor.
+  requisitos_acoes <- reactive({
+    e <- etapas_concluidas()
+    cadastro <- if (!inteiro_valido(input$input_cod)) "Informe um código inteiro válido." else
+      if (input$input_cod %in% EXISTING_RESERVOIR_IDS) "Escolha um código que não exista na rede consolidada." else
+      if (is.null(input$input_nomeac) || !nzchar(trimws(input$input_nomeac))) "Informe o nome do reservatório." else NULL
+    localizacao <- if (!e[1]) "Valide os dados básicos na etapa 1." else NULL
+    metodo <- if (!is.null(localizacao)) localizacao else
+      if (!e[2]) "Escolha o ponto de barramento no mapa ou desenhe o ponto pelas coordenadas." else NULL
+    bacia <- if (!is.null(metodo)) metodo else
+      if (!e[3]) "Escolha como obter a bacia na etapa 3." else
+      if (is.null(input$input_mod_reg) || !input$input_mod_reg %in% c("KNN", "ML", "Multimodelo")) "Escolha o modelo de regionalização." else NULL
+    automatico <- if (!is.null(bacia)) bacia else
+      if (!identical(wizard_branch(), "B")) "Escolha o método de traçado automático na etapa 3." else NULL
+    cascata <- if (!is.null(automatico)) automatico else
+      if (!bacia_tracada()) "Trace a bacia antes de gerar a cascata." else NULL
+    importacao <- if (!is.null(bacia)) bacia else
+      if (!identical(wizard_branch(), "A")) "Escolha o método de importação na etapa 3." else NULL
+    if (is.null(importacao)) {
+      upload <- input$upload_shapefile_a
+      nomes <- if (is.null(upload)) character() else tolower(upload$name)
+      bases <- tools::file_path_sans_ext(nomes[grepl("\\.shp$", nomes)])
+      completo <- length(bases) == 1 && all(paste0(bases, c(".shp", ".shx", ".dbf", ".prj")) %in% nomes)
+      importacao <- if (!completo) "Selecione os arquivos .shp, .shx, .dbf e .prj de uma única bacia." else
+        if (!inteiro_valido(input$input_id_jusante) ||
+            !input$input_id_jusante %in% c(0, EXISTING_RESERVOIR_IDS)) {
+          "Informe um ID a jusante da rede consolidada, ou 0 quando não houver reservatório a jusante."
+        } else NULL
+    }
+    dados <- if (!is.null(bacia)) bacia else if (!e[4]) {
+      if (identical(wizard_branch(), "B")) "Trace a bacia e gere os dados da cascata antes de avançar." else
+        "Importe a bacia e gere os dados antes de avançar."
+    } else NULL
+    salvar <- dados
+    if (is.null(salvar)) {
+      df <- cav_data()
+      salvar <- if (!nrow(df)) "Selecione um arquivo contendo os dados de Cota, Área e Volume." else
+        tryCatch({ ensure_spillway_cota_in_cav(df, input$input_cota_sang); NULL },
+                 error = function(e) conditionMessage(e))
+    }
+    simulacao <- if (!is.null(dados)) dados else
+      if (!e[5]) "Confirme e salve o CAV com a cota do sangrador antes de continuar." else NULL
+    list(validate_codigo_button = if (!inteiro_valido(input$input_cod)) "Informe um código inteiro válido." else NULL,
+         btn_step1_next = cadastro,
+         submit_button = if (!is.null(localizacao)) localizacao else
+           if (wizard_step() != 2 || !identical(input$location_method, "coordinates")) "Escolha ‘Informar coordenadas’ na etapa 2 para localizar o ponto." else
+           if (ponto_bloqueado()) "Use o reset para alterar o ponto de barramento." else
+             if (!coordenadas_validas()) "Informe latitude e longitude válidas para desenhar o ponto." else NULL,
+         btn_step2_next = metodo, btn_branch_a = metodo, btn_branch_b = metodo,
+         run_r_script = automatico, traca_cascata = cascata, btn_gerar_dados = importacao,
+         btn_step4_next = dados, cav_button = dados, confirm_save_button = salvar,
+         ver_grafico_button = if (!is.null(dados)) dados else
+           if (!nrow(cav_data())) "Selecione um arquivo CAV para visualizar o gráfico." else NULL,
+         btn_step5_next = simulacao, open_simula_button = simulacao)
+  })
+
+  permitir_acao <- function(id) {
+    falta <- requisitos_acoes()[[id]]
+    if (is.null(falta)) return(TRUE)
+    showNotification(falta, type = "warning", duration = 8)
+    FALSE
+  }
+  observe({
+    regras <- requisitos_acoes()
+    for (id in names(regras)) shinyjs::toggleState(id, condition = is.null(regras[[id]]))
+  })
+  output$wizard_requirements <- renderUI({
+    regras <- requisitos_acoes()
+    ids <- switch(as.character(wizard_step()),
+      "1" = "btn_step1_next", "2" = c(if (identical(input$location_method, "coordinates")) "submit_button", "btn_step2_next"),
+      "3" = "btn_branch_a", "4" = c(if (identical(wizard_branch(), "B"))
+        c("run_r_script", "traca_cascata") else "btn_gerar_dados", "btn_step4_next"),
+      "5" = c("cav_button", "btn_step5_next"), "6" = "open_simula_button")
+    mensagens <- unique(unlist(regras[ids], use.names = FALSE))
+    if (wizard_step() == 2 && (etapas_concluidas()[2] || ponto_bloqueado())) mensagens <- regras$btn_step2_next
+    if (length(mensagens)) div(class = "alert alert-info", role = "status",
+                              tags$strong("Para continuar:"), tags$ul(lapply(mensagens, tags$li)))
+  })
+  output$cav_requirements <- renderUI({
+    falta <- requisitos_acoes()$confirm_save_button
+    if (!is.null(falta)) div(class = "alert alert-info", role = "status", falta)
+  })
+  outputOptions(output, "cav_requirements", suspendWhenHidden = FALSE)
 
   # Painel de status sempre visivel (equivalente ao 'nearest-point-info' do
   # Python): mostra o ponto usado na selecao e o resultado do ultimo tracado.
@@ -75,6 +246,10 @@ server <- function(input, output, session) {
   }
 
   reset_reservoir_state <- function() {
+    marcar_etapas(c(2, 4:6), FALSE)
+    bacia_tracada(FALSE)
+    ponto_bloqueado(FALSE)
+    updateRadioButtons(session, "location_method", selected = "map")
     tabela_cas_state(NULL)
     geo_sf_state(NULL)
     standalone_state(FALSE)
@@ -95,6 +270,7 @@ server <- function(input, output, session) {
   # Etapa 1 — Dados basicos
   # =====================================================================
   observeEvent(input$validate_codigo_button, {
+    if (!permitir_acao("validate_codigo_button")) return()
     cod <- input$input_cod
     output$codigo_validation_feedback <- renderUI({
       if (is.null(cod) || is.na(cod)) {
@@ -114,6 +290,7 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$btn_step1_next, {
+    if (!permitir_acao("btn_step1_next")) return()
     cod <- input$input_cod
     nome <- input$input_nomeac
     show_err <- function(msg) output$step1_feedback <- renderUI(div(class = "alert alert-warning", msg))
@@ -127,11 +304,12 @@ server <- function(input, output, session) {
     if (is.null(nome) || trimws(nome) == "") return(show_err("Informe o nome do reservatório."))
 
     output$step1_feedback <- renderUI(NULL)
+    marcar_etapas(1, TRUE)
     wizard_step(2)
   })
 
   # =====================================================================
-  # Etapa 3 — Localizacao do ponto
+  # Etapa 2 — Localizacao do ponto
   # =====================================================================
   run_point_analysis <- function(lon, lat) {
     res <- comprehensive_point_analysis(lon, lat)
@@ -139,6 +317,9 @@ server <- function(input, output, session) {
     analysis_results$basin_name <- res$basin_name
     analysis_results$drainage_name <- res$drainage_name
     analysis_results$selected_point <- list(lon = lon, lat = lat)
+    marcar_etapas(2, TRUE)
+    marcar_etapas(4:6, FALSE)
+    bacia_tracada(FALSE)
     res
   }
 
@@ -184,6 +365,8 @@ server <- function(input, output, session) {
   }
 
   observeEvent(input$submit_button, {
+    if (!permitir_acao("submit_button")) return()
+    if (ponto_bloqueado()) return()
     lat_v <- input$input_lat; lon_v <- input$input_lon
     if (is.null(lat_v) || is.null(lon_v) || is.na(lat_v) || is.na(lon_v)) {
       showNotification("Favor digitar os valores de latitude e longitude.", type = "warning")
@@ -195,6 +378,8 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$map_click, {
+    if (ponto_bloqueado() || !etapas_concluidas()[1] || wizard_step() != 2 ||
+        !identical(input$location_method, "map")) return()
     click <- input$map_click
     req(click)
     withProgress(message = "Selecionando o ponto...", {
@@ -211,6 +396,7 @@ server <- function(input, output, session) {
   # Etapa 4 (B) — Trace a Bacia / Trace a Cascata / Resetar
   # =====================================================================
   observeEvent(input$run_r_script, {
+    if (!permitir_acao("run_r_script")) return()
     cod_value <- input$input_cod
     nomeac_value <- input$input_nomeac
     cod_int <- suppressWarnings(as.integer(cod_value))
@@ -232,6 +418,8 @@ server <- function(input, output, session) {
 
     withProgress(message = "Traçando a bacia...", {
       result <- tryCatch({
+        marcar_etapas(4:6, FALSE)
+        bacia_tracada(FALSE)
         clear_previous_simulation_data()
         bacia_sf <- trace_bacia_direct(sel$lon, sel$lat)
         ov <- select_containing_and_overlay(bacia_sf, sel$lon, sel$lat)
@@ -258,6 +446,8 @@ server <- function(input, output, session) {
       tabela_cas_state(result$pr$tabela)
       geo_sf_state(result$pr$geo_sf)
       standalone_state(isTRUE(result$standalone))
+      ponto_bloqueado(TRUE)
+      bacia_tracada(TRUE)
       analysis_results$containing_sub_basin_area_sq_km <- result$pr$bacia_area
       analysis_results$intersection_area_sq_km <- result$pr$intersection_area
 
@@ -310,6 +500,7 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$traca_cascata, {
+    if (!permitir_acao("traca_cascata")) return()
     cod_value <- suppressWarnings(as.integer(input$input_cod))
     nomeac_value <- input$input_nomeac
     mod_reg_value <- input$input_mod_reg
@@ -321,6 +512,7 @@ server <- function(input, output, session) {
     }
 
     withProgress(message = "Traçando a cascata...", {
+      marcar_etapas(4:6, FALSE)
       result <- tryCatch({
         reservoir_table <- load_consolidated_reservoirs()
         analysis <- list(
@@ -343,6 +535,7 @@ server <- function(input, output, session) {
       }
 
       casc <- result$cascata
+      marcar_etapas(4, TRUE)
       proxy <- leaflet::leafletProxy("map") |> leaflet::clearGroup("cascata")
       if (nrow(casc) > 0) {
         for (i in seq_len(nrow(casc))) {
@@ -377,6 +570,7 @@ server <- function(input, output, session) {
   # Etapa 4 (A) — Importar shapefile proprio
   # =====================================================================
   observeEvent(input$btn_gerar_dados, {
+    if (!permitir_acao("btn_gerar_dados")) return()
     cod_value <- input$input_cod
     nomeac_value <- input$input_nomeac
     mod_reg_value <- input$input_mod_reg
@@ -410,6 +604,8 @@ server <- function(input, output, session) {
     )
 
     withProgress(message = "Gerando dados...", {
+      marcar_etapas(4:6, FALSE)
+      clear_previous_simulation_data()
       draw_sf <- tryCatch(sf::st_transform(sf::st_read(shp_path, quiet = TRUE), 4326), error = function(e) NULL)
 
       result <- tryCatch(
@@ -429,6 +625,9 @@ server <- function(input, output, session) {
         "Shapefile importado e dados gerados com sucesso! Informe agora o CAV (com a Cota do Sangrador)."
       ))
 
+      ponto_bloqueado(TRUE)
+      marcar_etapas(4, TRUE)
+
       if (!is.null(draw_sf)) {
         leaflet::leafletProxy("map") |>
           leaflet::clearGroup("bacia") |>
@@ -443,22 +642,17 @@ server <- function(input, output, session) {
   # =====================================================================
   # Etapa 5 — CAV
   # =====================================================================
-  observeEvent(input$cav_button, showModal(cav_modal_ui()))
+  observeEvent(input$cav_button, {
+    if (permitir_acao("cav_button")) showModal(cav_modal_ui())
+  })
 
   output$cav_table <- DT::renderDT({
     DT::datatable(
-      cav_data(), editable = TRUE, rownames = FALSE,
+      cav_data(), editable = FALSE, rownames = FALSE,
       colnames = c("Cota (m)" = "COTA", "Área (km²)" = "AREA_KM2", "Volume (m³)" = "VOLUME_M3")
     )
   }, server = FALSE)
   outputOptions(output, "cav_table", suspendWhenHidden = FALSE)
-
-  observeEvent(input$cav_table_cell_edit, {
-    info <- input$cav_table_cell_edit
-    df <- cav_data()
-    df[info$row, info$col + 1] <- DT::coerceValue(info$value, df[info$row, info$col + 1])
-    cav_data(df)
-  })
 
   # input_feedback/save_feedback/cav_graph precisam ser registrados uma unica
   # vez no nivel superior do server (nao dentro de observeEvent) - caso
@@ -477,48 +671,69 @@ server <- function(input, output, session) {
   output$cav_graph <- plotly::renderPlotly({
     df <- cav_data()
     req(nrow(df) > 0)
-    plotly::plot_ly(df, x = ~AREA_KM2, y = ~COTA, type = "scatter", mode = "lines+markers", name = "Área") |>
-      plotly::layout(xaxis = list(title = "Área (km²)"), yaxis = list(title = "Cota (m)"))
+    cota_sang <- input$input_cota_sang
+    linhas <- list()
+    rotulos <- list()
+    if (length(cota_sang) == 1L && is.finite(cota_sang)) {
+      linhas <- list(list(
+        type = "line", xref = "paper", x0 = 0, x1 = 1,
+        yref = "y", y0 = cota_sang, y1 = cota_sang,
+        line = list(color = "#c0392b", width = 2, dash = "dash")
+      ))
+      rotulos <- list(list(
+        xref = "paper", x = 1, xanchor = "right",
+        yref = "y", y = cota_sang, yanchor = "bottom",
+        text = sprintf("Cota do sangradouro: %g m", cota_sang),
+        showarrow = FALSE, font = list(color = "#c0392b"),
+        bgcolor = "rgba(255,255,255,0.85)"
+      ))
+    }
+    plotly::plot_ly(df, x = ~I(VOLUME_M3 / 1e6), y = ~COTA, type = "scatter", mode = "lines+markers", name = "Volume",
+      hovertemplate = "Volume: %{x:.3f} hm³<br>Cota: %{y:.3f} m<extra></extra>") |>
+      plotly::layout(xaxis = list(title = "Volume (hm³)"), yaxis = list(title = "Cota (m)"),
+                     shapes = linhas, annotations = rotulos)
   })
   outputOptions(output, "cav_graph", suspendWhenHidden = FALSE)
 
-  observeEvent(input$add_data_button, {
-    cota <- input$cota_input; area <- input$area_input; volume <- input$volume_input
-    if (is.null(cota) || is.na(cota) || is.null(area) || is.na(area) || is.null(volume) || is.na(volume)) {
-      input_feedback_msg(div(class = "alert alert-warning", "Por favor, preencha todos os campos"))
-      return()
-    }
-    df <- cav_data()
-    df <- rbind(df, data.frame(COTA = cota, AREA_KM2 = area, VOLUME_M3 = volume))
-    cav_data(df)
-    input_feedback_msg(NULL)
-  })
-
   observeEvent(input$upload_cav_data, {
+    if (!permitir_acao("cav_button")) return()
     f <- input$upload_cav_data
     req(f)
+    cav_data(data.frame(COTA = numeric(0), AREA_KM2 = numeric(0), VOLUME_M3 = numeric(0)))
+    save_feedback_msg(NULL)
+    input_feedback_msg(NULL)
     ext <- tolower(tools::file_ext(f$name))
     df <- tryCatch({
       if (ext == "csv") utils::read.csv(f$datapath, stringsAsFactors = FALSE)
-      else if (ext %in% c("xlsx", "xls")) openxlsx::read.xlsx(f$datapath)
+      else if (ext %in% c("xlsx", "xls")) as.data.frame(readxl::read_excel(f$datapath))
       else stop("Formato nao suportado")
     }, error = function(e) NULL)
 
     needed <- c("COTA", "AREA_KM2", "VOLUME_M3")
     if (is.null(df) || !all(needed %in% names(df))) {
-      showNotification("O arquivo precisa ter as colunas COTA, AREA_KM2, VOLUME_M3.", type = "error")
+      input_feedback_msg(div(class = "alert alert-danger", "Não foi possível importar o arquivo. Verifique o formato e as colunas COTA, AREA_KM2, VOLUME_M3."))
       return()
     }
-    cav_data(df[, needed, drop = FALSE])
+    df <- df[, needed, drop = FALSE]
+    if (!nrow(df) || !all(vapply(df, is.numeric, logical(1))) ||
+        !all(is.finite(as.matrix(df)))) {
+      input_feedback_msg(div(class = "alert alert-danger", "O arquivo CAV deve conter linhas com valores numéricos preenchidos nas três colunas."))
+      return()
+    }
+    cav_data(df)
+    input_feedback_msg(div(class = "alert alert-success", sprintf("Arquivo CAV importado: %d linhas. Confira a cota do sangradouro e confirme o salvamento.", nrow(df))))
   })
 
   observeEvent(input$ver_grafico_button, {
+    if (!permitir_acao("ver_grafico_button")) return()
     df <- cav_data()
     if (nrow(df) == 0) return()
     shinyjs::show("cav_graph_container")
   })
 
   observeEvent(input$confirm_save_button, {
+    if (!permitir_acao("confirm_save_button")) return()
+    marcar_etapas(5:6, FALSE)
     cod <- input$input_cod
     cota_sang <- input$input_cota_sang
     df <- cav_data()
@@ -530,6 +745,7 @@ server <- function(input, output, session) {
     if (inherits(result, "error")) {
       save_feedback_msg(div(class = "alert alert-danger", conditionMessage(result)))
     } else {
+      marcar_etapas(5, TRUE)
       save_feedback_msg(div(class = "alert alert-success", "Dados salvos com sucesso!"))
     }
   })
@@ -538,7 +754,10 @@ server <- function(input, output, session) {
   # Etapa 6 — Executar Simulacao / Resetar tudo
   # =====================================================================
   observeEvent(input$open_simula_button, {
-    withProgress(message = "Executando Simulação MEVAZ...", {
+    if (!permitir_acao("open_simula_button")) return()
+    marcar_etapas(6, FALSE)
+    withProgress(message = "Executando Simulação MEVAZ...",
+                 detail = "Aguarde a conclusão. Mantenha esta janela aberta.", {
       result <- tryCatch({
         ok_modreg <- ensure_simulation_modreg_input()
         if (!ok_modreg$ok) stop(ok_modreg$message)
@@ -556,6 +775,7 @@ server <- function(input, output, session) {
       ))
     } else {
       sintese_path <- file.path(REDE_RES_TEST, "output", "sintese", "Sintese.xlsx")
+      marcar_etapas(6, file.exists(sintese_path))
       showModal(modalDialog(
         title = "Fim da Simulação",
         if (file.exists(sintese_path)) {
@@ -567,19 +787,205 @@ server <- function(input, output, session) {
         } else {
           "Simulação concluída, mas Sintese.xlsx não foi encontrado."
         },
+        footer = tagList(
+          modalButton("Fechar"),
+          if (file.exists(sintese_path)) actionButton("open_results_button_modal", "Resultados", class = "btn-primary")
+        ),
         easyClose = TRUE
       ))
     }
   })
 
+  open_results <- function() {
+    req(etapas_concluidas()[6])
+    loaded <- tryCatch({
+      after <- read_results_snapshot(REDE_RES_TEST)
+      before <- tryCatch(read_results_snapshot(REDE_RES_CONS), error = function(e) NULL)
+      series <- tryCatch(read_results_series(REDE_RES_TEST), error = function(e) NULL)
+      list(after = after, before = before, new_id = as.character(input$input_cod), series = series)
+    }, error = function(e) e)
+    if (inherits(loaded, "error")) {
+      showModal(modalDialog(title = "Resultados", "Não foi possível carregar os resultados da simulação.",
+        tags$p(conditionMessage(loaded)), footer = modalButton("Fechar")))
+      return()
+    }
+    results_snapshot(loaded)
+    showModal(modalDialog(title = "Resultados da simulação MEVAZ", size = "l",
+      div(class = "mevaz-results-panel",
+        tabsetPanel(
+          tabPanel("Novo reservatório", uiOutput("results_new_reservoir")),
+          tabPanel("Impactos na rede",
+            tags$p("Reservatórios existentes com mudança na vazão regularizada em relação à rede consolidada, para a garantia selecionada."),
+            selectInput("results_guarantee", "Garantia de atendimento", choices = c("90% — Q90" = "Q90", "95% — Q95" = "Q95", "98% — Q98" = "Q98")),
+            tags$p("As vazões usam o método escolhido para cada reservatório. Confira os métodos antes e depois na tabela. Reservatórios sem resultado anterior disponível não entram na comparação; percentuais com vazão anterior zero não são calculados."),
+            plotly::plotlyOutput("results_impact_plot", height = "360px"),
+            DT::DTOutput("results_impact_table")
+          ),
+          tabPanel("Séries da simulação",
+            tags$p("Resultados mensais do cenário com o novo reservatório, usando o método de regionalização escolhido para cada reservatório."),
+            uiOutput("results_series_controls"),
+            uiOutput("results_series_description"),
+            tags$p("Selecione o período ou use a faixa abaixo dos gráficos para aproximar um intervalo. Passe o mouse para consultar valores; clique na legenda para ocultar ou mostrar curvas."),
+            uiOutput("results_series_charts")
+          )
+        )
+      ),
+      footer = tagList(downloadButton("download_results_sintese", "Baixar Sintese.xlsx"), modalButton("Fechar")),
+      easyClose = TRUE
+    ))
+  }
+  observeEvent(input$open_results_button, open_results())
+  observeEvent(input$open_results_button_modal, open_results())
+
+  output$results_new_reservoir <- renderUI({
+    req(etapas_concluidas()[6])
+    result <- results_snapshot()
+    req(result)
+    row <- result$after$general[result$after$general$ID == result$new_id, , drop = FALSE]
+    if (nrow(row) != 1L) return(div(class = "alert alert-warning", "O novo reservatório não foi encontrado na síntese."))
+    tagList(
+      tags$h4(row$Reservatorio),
+      tags$p(sprintf("Código: %s • Método de regionalização: %s", row$ID, row$Metodo)),
+      tags$p(sprintf("Capacidade: %s hm³ • Bacia hidrográfica: %s km²",
+        results_number(row$Capacidade_hm3, 2), results_number(row$Bacia_Hidrografica_km2, 2))),
+      div(class = "mevaz-results-cards", lapply(c("Q90", "Q95", "Q98"), function(q) {
+        div(class = "mevaz-result-card", tags$h5(q),
+          div(class = "mevaz-result-value", results_number(row[[q]]), tags$small(" m³/s")),
+          tags$p(sprintf("Garantia de atendimento de %s%%", substring(q, 2))))
+      })),
+      tags$p("Vazão regularizada: retirada calculada pelo modelo para o nível de garantia indicado. O novo reservatório não possui resultado anterior para comparação.")
+    )
+  })
+
+  results_comparison <- reactive({
+    req(etapas_concluidas()[6])
+    result <- results_snapshot()
+    req(result)
+    validate(need(!is.null(result$before), "Os resultados da rede consolidada não estão disponíveis para comparação."))
+    guarantee <- input$results_guarantee
+    if (is.null(guarantee)) guarantee <- "Q90"
+    req(guarantee %in% c("Q90", "Q95", "Q98"))
+    compare_results(result$after, result$before, result$new_id, guarantee)
+  })
+
+  output$results_impact_table <- DT::renderDT({
+    df <- results_comparison()
+    validate(need(nrow(df) > 0, "Nenhum reservatório apresentou mudança na vazão regularizada para a garantia selecionada."))
+    DT::datatable(df, rownames = FALSE,
+      colnames = c("Código", "Reservatório", "Método anterior", "Método simulado", "Antes (m³/s)", "Depois (m³/s)", "Diferença (m³/s)", "Diferença (%)"),
+      options = list(pageLength = 10, scrollX = TRUE,
+        language = list(search = "Buscar:", lengthMenu = "Mostrar _MENU_ reservatórios", info = "_START_ a _END_ de _TOTAL_ reservatórios", infoEmpty = "Sem reservatórios", zeroRecords = "Nenhum reservatório encontrado", paginate = list(previous = "Anterior", "next" = "Próxima")))) |>
+      DT::formatRound(c("Antes", "Depois", "Diferenca"), digits = 3, mark = ".", dec.mark = ",") |>
+      DT::formatRound("Percentual", digits = 2, mark = ".", dec.mark = ",")
+  })
+
+  output$results_impact_plot <- plotly::renderPlotly({
+    df <- results_comparison()
+    df <- df[is.finite(df$Diferenca), , drop = FALSE]
+    validate(need(nrow(df) > 0, "Nenhum reservatório apresentou mudança na vazão regularizada para a garantia selecionada."))
+    df <- df[order(abs(df$Diferenca), decreasing = TRUE), , drop = FALSE]
+    # Mantem o grafico legivel; a tabela oferece todos os reservatorios.
+    df <- head(df, 15)
+    labels <- paste0(df$Reservatorio, " (", df$Codigo, ")")
+    plotly::plot_ly(x = df$Diferenca, y = labels, type = "bar", orientation = "h",
+      marker = list(color = ifelse(df$Diferenca < 0, "#b33a3a", "#00793C")),
+      text = paste0(labels, "<br>Antes: ", round(df$Antes, 3), " m³/s<br>Depois: ", round(df$Depois, 3), " m³/s"),
+      hoverinfo = "text+x") |>
+      plotly::layout(title = "Variação da vazão regularizada — até 15 maiores diferenças",
+        xaxis = list(title = "Diferença (m³/s)", zeroline = TRUE),
+        yaxis = list(title = "", autorange = "reversed", automargin = TRUE), margin = list(l = 160))
+  })
+
+  output$results_series_controls <- renderUI({
+    req(etapas_concluidas()[6])
+    result <- results_snapshot()
+    req(result)
+    if (is.null(result$series)) return(div(class = "alert alert-warning", "As séries temporais desta simulação não estão disponíveis."))
+    ids <- results_connected_ids(result$after$reservoirs, result$new_id)
+    available <- unique(unlist(lapply(result$series, names), use.names = FALSE))
+    reservoirs <- result$after$general
+    reservoirs <- reservoirs[reservoirs$ID %in% intersect(ids, available), , drop = FALSE]
+    if (!nrow(reservoirs)) return(div(class = "alert alert-warning", "Não há séries disponíveis para os reservatórios desta rede."))
+    reservoirs <- reservoirs[order(reservoirs$ID != result$new_id, reservoirs$Reservatorio), , drop = FALSE]
+    selected <- reservoirs$ID[1]
+    dates <- as.Date(unlist(lapply(result$series$Q90[intersect(reservoirs$ID, names(result$series$Q90))], function(df) as.numeric(as.Date(df$Datas)))), origin = "1970-01-01")
+    dates <- dates[!is.na(dates)]
+    if (!length(dates)) return(div(class = "alert alert-warning", "As séries não possuem datas disponíveis."))
+    period <- range(dates)
+    choices <- stats::setNames(reservoirs$ID, paste0(reservoirs$Reservatorio, " (", reservoirs$ID, ")", ifelse(reservoirs$ID == result$new_id, " — Novo", "")))
+    tagList(
+      fluidRow(
+        column(8, selectInput("results_series_reservoir", "Reservatório", choices = choices, selected = selected)),
+        column(4, selectInput("results_series_guarantee", "Garantia de atendimento", choices = c("90% — Q90" = "Q90", "95% — Q95" = "Q95", "98% — Q98" = "Q98")))
+      ),
+      dateRangeInput("results_series_period", "Período", start = period[1], end = period[2], min = period[1], max = period[2], language = "pt-BR", format = "dd/mm/yyyy", separator = " até ", width = "100%"),
+      checkboxGroupInput("results_series_variables", "Séries exibidas",
+        choices = c("Volume armazenado" = "Vol_fimmes_hm3", "Afluência" = "Aflu_m3s", "Retirada atendida" = "Ret_m3s", "Vertimento" = "Ver_m3s"),
+        selected = c("Vol_fimmes_hm3", "Aflu_m3s", "Ret_m3s", "Ver_m3s"), inline = TRUE)
+    )
+  })
+
+  results_series_data <- reactive({
+    req(etapas_concluidas()[6])
+    result <- results_snapshot()
+    req(result)
+    validate(need(!is.null(result$series), "As séries temporais desta simulação não estão disponíveis."))
+    req(input$results_series_reservoir, input$results_series_guarantee, input$results_series_period)
+    df <- tryCatch(prepare_results_series(result$series, input$results_series_reservoir,
+      input$results_series_guarantee, input$results_series_period), error = function(e) e)
+    validate(need(!inherits(df, "error"), if (inherits(df, "error")) conditionMessage(df) else ""))
+    df
+  })
+
+  output$results_series_description <- renderUI({
+    df <- results_series_data()
+    result <- results_snapshot()
+    reservoir <- result$after$general[result$after$general$ID == input$results_series_reservoir, , drop = FALSE]
+    req(nrow(reservoir) == 1L)
+    tags$p(sprintf("Método: %s • %d registros mensais • %s a %s. O volume é o armazenado ao fim do mês; a retirada é a efetivamente atendida na simulação.",
+      reservoir$Metodo, nrow(df), format(min(df$Datas), "%m/%Y"), format(max(df$Datas), "%m/%Y")))
+  })
+
+  output$results_series_charts <- renderUI({
+    req(etapas_concluidas()[6])
+    result <- results_snapshot()
+    req(result, result$series)
+    variables <- input$results_series_variables
+    if (!length(variables)) return(div(class = "alert alert-info", "Selecione pelo menos uma série para visualizar."))
+    tagList(
+      if ("Vol_fimmes_hm3" %in% variables) tagList(tags$h4("Volume armazenado"), plotly::plotlyOutput("results_series_volume", height = "350px")),
+      if (any(variables %in% c("Aflu_m3s", "Ret_m3s", "Ver_m3s"))) tagList(tags$h4("Vazões mensais"), plotly::plotlyOutput("results_series_flows", height = "400px"))
+    )
+  })
+
+  output$results_series_volume <- plotly::renderPlotly({
+    req("Vol_fimmes_hm3" %in% input$results_series_variables)
+    results_time_plot(results_series_data(), "Vol_fimmes_hm3", volume = TRUE)
+  })
+  output$results_series_flows <- plotly::renderPlotly({
+    variables <- intersect(input$results_series_variables, c("Aflu_m3s", "Ret_m3s", "Ver_m3s"))
+    req(length(variables) > 0)
+    results_time_plot(results_series_data(), variables)
+  })
+
+  output$download_results_sintese <- downloadHandler(
+    filename = function() "Sintese.xlsx",
+    content = function(file) {
+      req(etapas_concluidas()[6])
+      file.copy(file.path(REDE_RES_TEST, "output", "sintese", "Sintese.xlsx"), file)
+    }
+  )
+
   output$download_sintese <- downloadHandler(
     filename = function() "Sintese.xlsx",
     content = function(file) {
+      req(etapas_concluidas()[6])
       file.copy(file.path(REDE_RES_TEST, "output", "sintese", "Sintese.xlsx"), file)
     }
   )
 
   observeEvent(input$reset_button, {
+    marcar_etapas(1:6, FALSE)
     wizard_step(1)
     wizard_branch(NULL)
     clear_previous_simulation_data()
@@ -596,13 +1002,8 @@ server <- function(input, output, session) {
 
   output$map <- leaflet::renderLeaflet({
     leaflet::leaflet(options = leaflet::leafletOptions(preferCanvas = TRUE)) |>
-      # Fundo claro/neutro (CartoDB Positron) como base: ao contrario do
-      # OpenStreetMap, nao desenha os proprios rios, entao a rede de drenagem
-      # ANADEM abaixo fica sendo o UNICO conjunto de linhas azuis na carta -
-      # evita a dissonancia de dois reticulados de rios que nao coincidem
-      # (ANADEM = tracado do MNT usado no traçado; OSM = cartografico).
-      # O OpenStreetMap fica disponivel como camada alternativa no controle.
-      leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron, group = "Mapa claro") |>
+      # OpenStreetMap como unico fundo; o controle abaixo permite alternar
+      # apenas as camadas de drenagem e regioes hidrograficas.
       leaflet::addProviderTiles(leaflet::providers$OpenStreetMap, group = "OpenStreetMap") |>
       leaflet::setView(lng = CENTER_LON, lat = CENTER_LAT, zoom = 7) |>
       leaflet::addPolygons(
@@ -626,7 +1027,6 @@ server <- function(input, output, session) {
         group = "Rede de drenagem"
       ) |>
       leaflet::addLayersControl(
-        baseGroups = c("Mapa claro", "OpenStreetMap"),
         overlayGroups = c("Rede de drenagem", "Regiões hidrográficas"),
         options = leaflet::layersControlOptions(collapsed = TRUE)
       ) |>
