@@ -118,16 +118,15 @@ echo
 echo "============================================================"
 echo "                     SIS-MEVAZ"
 echo "============================================================"
-echo
+echo " "
 echo "Iniciando a interface do Sis-MEVAZ..."
 echo
 echo "Aguarde alguns segundos."
 echo "O navegador será aberto automaticamente."
 echo
 echo "Para encerrar o Sis-MEVAZ, feche esta janela."
-echo
 echo "============================================================"
-echo
+echo " "
 
 exec "$RSCRIPT" --vanilla -e \
     "SisMEVAZ::SisMEVAZ_interativo(
