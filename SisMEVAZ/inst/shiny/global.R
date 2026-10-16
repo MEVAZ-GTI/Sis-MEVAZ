@@ -133,6 +133,8 @@ message("SisMEVAZ/Shiny: ", length(EXISTING_RESERVOIR_IDS), " reservatorios cons
 # Helpers geoespaciais/logicos portados do Python (Fase 1)
 for (f in list.files("R", pattern = "\\.R$", full.names = TRUE)) source(f)
 
+NAMED_DRAINAGE_LL <- named_river_layer(DRAINAGE_SF)
+
 # Limpa entradas de uma simulacao anterior a cada inicializacao do app
 # (equivalente ao "if __name__ == '__main__': clear_previous_simulation_data()"
 # do Python). Roda uma vez, quando o processo R arranca.

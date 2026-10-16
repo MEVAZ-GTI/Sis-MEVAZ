@@ -1,9 +1,7 @@
 # =====================================================================
 # MEVAZ - versao Shiny
-# ui.R  -  Fase 2: wizard completo de 6 etapas + tema FUNCEME.
-#          A reatividade real (validacoes, chamadas aos helpers R da Fase 1,
-#          janelas de carregamento) entra na Fase 3. Aqui ha apenas a
-#          navegacao minima entre etapas, para permitir testar o layout.
+# ui.R  -  Assistente de 7 etapas + tema FUNCEME.
+#          O server.R controla validacoes, processamento e navegacao.
 #
 # NOTA: as funcoes auxiliares de UI (cav_modal_ui, processing_modal_ui,
 # step_box, half_button_row) ficam em global.R, e nao aqui - o Shiny carrega
@@ -21,7 +19,7 @@ ui <- bslib::page_fluid(
   title = "MEVAZ",
   shinyjs::useShinyjs(),
   tags$head(
-    tags$link(rel = "stylesheet", type = "text/css", href = "funceme_theme.css"),
+    tags$link(rel = "stylesheet", type = "text/css", href = "funceme_theme.css?v=20261015-reservoir-sheet"),
     tags$script(src = "simulation_timer.js", defer = NA)
   ),
 
@@ -58,10 +56,18 @@ ui <- bslib::page_fluid(
       ),
       uiOutput("wizard_progress_label"),
 
-      # ===== ETAPA 1: Dados basicos =====
-      step_box("1", "Etapa 1 — Dados básicos do novo reservatório",
+      # ===== ETAPA 1: Identificacao =====
+      step_box("1", "Etapa 1 — Identificação do novo açude",
         div(class = "mevaz-field",
-           tags$label("Código do Novo Reservatório:", class = "mevaz-label"),
+           div(class = "mevaz-code-label",
+             tags$label("Código do Novo Reservatório:", class = "mevaz-label", `for` = "input_cod"),
+             tags$span(class = "mevaz-code-help",
+               tags$button("ⓘ", type = "button", class = "mevaz-info-button",
+                 `aria-label` = "Informação sobre código válido", `aria-describedby` = "codigo_help"),
+               tags$span(id = "codigo_help", class = "mevaz-help-text", role = "tooltip",
+                 "Código válido é um número inteiro ainda não utilizado na rede consolidada de reservatórios. Não use letras, símbolos ou casas decimais.")
+             )
+           ),
            numericInput("input_cod", NULL, value = NA, width = "100%"),
            actionButton("validate_codigo_button", "Validar Código", class = "btn-outline-primary rounded-pill w-100"),
            uiOutput("codigo_validation_feedback")
@@ -87,87 +93,89 @@ ui <- bslib::page_fluid(
         tags$p("Informe latitude e longitude em graus decimais e clique em ‘Localizar ponto’. Use valores negativos para sul e oeste.", class = "mevaz-hint"),
         div(class = "mevaz-field",
            tags$label("Latitude:", class = "mevaz-label"),
-           numericInput("input_lat", NULL, value = NA, width = "100%")
+           htmltools::tagQuery(numericInput("input_lat", NULL, value = NA, width = "100%"))$
+             find("input")$addAttrs(placeholder = "Ex.: -5.123456", step = "any")$allTags()
         ),
         div(class = "mevaz-field",
            tags$label("Longitude:", class = "mevaz-label"),
-           numericInput("input_lon", NULL, value = NA, width = "100%")
+           htmltools::tagQuery(numericInput("input_lon", NULL, value = NA, width = "100%"))$
+             find("input")$addAttrs(placeholder = "Ex.: -39.123456", step = "any")$allTags()
         ),
         actionButton("submit_button", "Localizar ponto", class = "btn-outline-primary rounded-pill w-100 mb-2")
         ),
+        uiOutput("location_summary"),
         half_button_row("btn_step2_back", "← Voltar", "btn_step2_next", "Avançar →")
       ),
 
-      # ===== ETAPA 3: Escolha do metodo =====
-      step_box("3", "Etapa 3 - Definição da bacia do novo reservatório",
-        tags$p("Como deseja definir a bacia do novo reservatório?", style = "text-align:center;"),
-        actionButton("btn_branch_a", "A — Importar meus shapefiles", class = "btn-outline-primary rounded-pill w-100 mb-2"),
-        actionButton("btn_branch_b", "B — Traçar bacia e cascata automaticamente", class = "btn-outline-primary rounded-pill w-100 mb-2"),
-        actionButton("btn_step3_back", "← Voltar", class = "btn-outline-secondary rounded-pill w-100")
-      ),
-
-      # ===== ETAPA 4: Bacia e dados (depende do metodo) =====
-      step_box("4", "Etapa 4 — Bacia e dados do reservatório",
-        div(class = "mevaz-field",
-           tags$label("Modelo de Regionalização:", class = "mevaz-label"),
-           selectInput("input_mod_reg", NULL,
-                      choices = c("KNN", "ML", "Multimodelo"), selected = "KNN", width = "100%")
+      # ===== ETAPA 3: Obter a bacia =====
+      step_box("3", "Etapa 3 — Bacia do novo açude",
+        radioButtons("basin_method", "Como deseja obter a bacia?",
+          choices = c("Traçar automaticamente" = "B", "Importar shapefile" = "A"), selected = "B"),
+        conditionalPanel(condition = "input.basin_method == 'B'",
+          tags$p("Trace a bacia a partir do ponto de barramento escolhido.", class = "mevaz-hint"),
+          actionButton("run_r_script", "Traçar bacia", class = "btn-outline-primary rounded-pill w-100 mb-2")
         ),
-
-        # --- Metodo B: tracar automaticamente ---
-        conditionalPanel(
-          condition = "output.wizard_branch_js == 'B'",
-          tags$p("Método B: traçado automático.", class = "mevaz-hint"),
-          actionButton("run_r_script", "Trace a Bacia", class = "btn-outline-primary rounded-pill w-100 mb-2"),
-          actionButton("traca_cascata", "Trace a Cascata", class = "btn-outline-primary rounded-pill w-100 mb-2"),
-          tags$small("Gere a cascata depois de traçar a bacia.", class = "mevaz-hint")
+        conditionalPanel(condition = "input.basin_method == 'A'",
+          fileInput("upload_shapefile_a", "Arquivo da bacia",
+            multiple = TRUE, accept = c(".shp", ".shx", ".dbf", ".prj", ".cpg"),
+            buttonLabel = "Procurar...", placeholder = "Nenhum arquivo selecionado"),
+          tags$p("Selecione os arquivos .shp, .shx, .dbf e .prj da mesma bacia.", class = "mevaz-hint"),
+          actionButton("import_basin_button", "Importar e conferir bacia", class = "btn-outline-primary rounded-pill w-100 mb-2")
         ),
-
-        # --- Metodo A: importar shapefiles ---
-        conditionalPanel(
-          condition = "output.wizard_branch_js == 'A'",
-          tags$p("Método A: importe o shapefile da bacia do novo reservatório.", class = "mevaz-hint"),
-          fileInput("upload_shapefile_a", "Importar shapefile da bacia",
-                   multiple = TRUE, accept = c(".shp", ".shx", ".dbf", ".prj", ".cpg"),
-                   buttonLabel = "Procurar...", placeholder = "Nenhum arquivo selecionado"),
-          tags$small("Selecione todos os arquivos do shapefile (.shp, .shx, .dbf, .prj).",
-                    class = "mevaz-hint"),
-          div(class = "mevaz-field", style = "margin-top:10px;",
-             tags$label("ID do reservatório a jusante:", class = "mevaz-label"),
-             numericInput("input_id_jusante", NULL, value = NA, width = "100%")
-          ),
-          actionButton("btn_gerar_dados", "Gerar dados e avançar →", class = "btn-primary rounded-pill w-100"),
-          uiOutput("step4a_feedback")
-        ),
-
+        uiOutput("basin_feedback"),
+        uiOutput("basin_summary"),
         actionButton("reset_input_b", "Resetar mapa e dados", class = "btn-outline-danger rounded-pill w-100 mevaz-reset-btn"),
-        tags$div(style = "margin-top:10px;"),
-        half_button_row("btn_step4_back", "← Voltar", "btn_step4_next", "Avançar →")
+        half_button_row("btn_step3_back", "← Voltar", "btn_step3_next", "Avançar →")
       ),
 
-      # ===== ETAPA 5: CAV =====
-      step_box("5", "Etapa 5 — CAV (Cota, Área, Volume)",
-        tags$p("Selecione o arquivo da curva Cota-Área-Volume e informe a cota do sangradouro do novo reservatório.",
-              style = "text-align:center;"),
-        actionButton("cav_button", "Importar arquivo CAV", class = "btn-outline-primary rounded-pill w-100 mb-2"),
+      # ===== ETAPA 4: Modelo de regionalizacao =====
+      step_box("4", "Etapa 4 — Modelo de regionalização",
+        tags$p("Escolha como estimar as afluências do novo açude a partir das características da bacia.", class = "mevaz-hint"),
+        radioButtons("input_mod_reg", "Modelo de regionalização:",
+          choices = c("KNN — Similaridade entre bacias" = "KNN", "ML — Modelo linear" = "ML", "Multimodelo — Combinação de KNN\u00a0e\u00a0ML" = "Multimodelo"), selected = "KNN", width = "100%"),
+        div(class = "mevaz-model-explanations",
+          tags$p(tags$strong("KNN: "), "Transfere os parâmetros do modelo hidrológico da estação de referência com características fisiográficas mais semelhantes às da bacia."),
+          tags$p(tags$strong("ML: "), "Estima os parâmetros do modelo hidrológico por relações lineares com as características da bacia e a precipitação média."),
+          tags$p(tags$strong("Multimodelo: "), "Utiliza a média das séries de afluência estimadas por KNN e ML.")
+        ),
+        half_button_row("btn_step4_back", "← Voltar", "btn_step4_next", "Confirmar e avançar →")
+      ),
+
+      # ===== ETAPA 5: Preparacao da rede =====
+      step_box("5", "Etapa 5 — Preparação da rede e dos dados",
+        conditionalPanel(condition = "output.wizard_branch_js == 'B'",
+          tags$p("Prepare a cascata e os dados dos reservatórios envolvidos usando a bacia traçada e o modelo escolhido.", class = "mevaz-hint"),
+          actionButton("traca_cascata", "Preparar rede e dados", class = "btn-primary rounded-pill w-100 mb-2")
+        ),
+        conditionalPanel(condition = "output.wizard_branch_js == 'A'",
+          tags$p("Informe o reservatório a jusante para preparar os dados da bacia importada.", class = "mevaz-hint"),
+          numericInput("input_id_jusante", "Código do reservatório a jusante:", value = NA, width = "100%"),
+          tags$p("Use 0 quando não houver reservatório a jusante.", class = "mevaz-hint"),
+          actionButton("btn_gerar_dados", "Preparar rede e dados", class = "btn-primary rounded-pill w-100 mb-2")
+        ),
+        uiOutput("network_feedback"),
         half_button_row("btn_step5_back", "← Voltar", "btn_step5_next", "Avançar →")
       ),
 
-      # ===== ETAPA 6: Simulacao =====
-      step_box("6", "Etapa 6 — Executar a simulação MEVAZ",
+      # ===== ETAPA 6: CAV =====
+      step_box("6", "Etapa 6 — CAV e cota do sangradouro",
+        tags$p("Selecione o arquivo da curva Cota-Área-Volume e informe a cota do sangradouro do novo reservatório.", style = "text-align:center;"),
+        actionButton("cav_button", "Importar arquivo CAV", class = "btn-outline-primary rounded-pill w-100 mb-2"),
+        half_button_row("btn_step6_back", "← Voltar", "btn_step6_next", "Avançar →")
+      ),
+
+      # ===== ETAPA 7: Simulacao =====
+      step_box("7", "Etapa 7 — Simulação e resultados",
         actionButton("open_simula_button", "Executar Simulação MEVAZ", class = "btn-primary rounded-pill w-100 mb-2"),
         actionButton("open_results_button", "Resultados", class = "btn-outline-primary rounded-pill w-100 mb-2"),
-        actionButton("btn_step6_back", "← Voltar", class = "btn-outline-primary rounded-pill w-100")
+        actionButton("btn_step7_back", "← Voltar", class = "btn-outline-primary rounded-pill w-100")
       ),
 
       uiOutput("wizard_requirements"),
+      uiOutput("reservoir_sheet"),
       uiOutput("wizard_stage_status"),
       actionButton("reset_button", "Resetar tudo", class = "btn-outline-danger rounded-pill w-100 mevaz-reset-btn"),
 
-      # Painel de status sempre visivel (independente da etapa), equivalente
-      # aos divs 'clicked-coordinates'/'nearest-point-info' do Python: mostra
-      # o ponto selecionado e o resultado das ultimas acoes de tracado.
-      uiOutput("point_feedback"),
       uiOutput("ponto_bloqueado_feedback")
     ),
 

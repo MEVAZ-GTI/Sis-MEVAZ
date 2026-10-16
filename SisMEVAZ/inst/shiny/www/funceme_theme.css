@@ -288,6 +288,107 @@ body > .container-fluid {
     margin-bottom: 14px;
 }
 
+.mevaz-step-summary {
+    margin: 12px 0;
+    padding: 12px 14px;
+    border: 1px solid #cfe3d8;
+    border-radius: 8px;
+    background: #f0f8f3;
+    color: #314f3e;
+    font-size: 13px;
+    line-height: 1.4;
+}
+.mevaz-summary-title { font-weight: 700; margin: 0 0 8px; }
+.mevaz-step-summary dl {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px 10px;
+    margin: 0;
+}
+.mevaz-step-summary dt { font-weight: 400; }
+.mevaz-step-summary dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.mevaz-summary-note, .mevaz-summary-warning { margin: 8px 0 0; font-size: 12px; }
+.mevaz-summary-warning { color: #805500; }
+
+.mevaz-reservoir-sheet table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.mevaz-reservoir-sheet th, .mevaz-reservoir-sheet td {
+    padding: 5px 0;
+    vertical-align: top;
+    border-bottom: 1px solid #dce9e1;
+    overflow-wrap: anywhere;
+}
+.mevaz-reservoir-sheet th { width: 48%; padding-right: 10px; font-weight: 400; }
+.mevaz-reservoir-sheet td { font-weight: 600; }
+.mevaz-reservoir-sheet tr:last-child th, .mevaz-reservoir-sheet tr:last-child td { border-bottom: 0; }
+
+#input_lat::placeholder,
+#input_lon::placeholder {
+    color: #858d91;
+    opacity: 1;
+}
+
+.mevaz-code-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+}
+.mevaz-code-label .mevaz-label { margin-bottom: 0; }
+.mevaz-code-help { position: relative; display: inline-flex; }
+.mevaz-info-button {
+    border: none;
+    background: transparent;
+    color: var(--funceme-green-dark);
+    font-size: 19px;
+    line-height: 1;
+    padding: 4px;
+    cursor: pointer;
+}
+.mevaz-info-button:focus-visible {
+    outline: 2px solid var(--funceme-green-dark);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+.mevaz-help-text {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 1100;
+    width: 240px;
+    max-width: calc(100vw - 48px);
+    padding: 12px;
+    border: 1px solid #d8e7ef;
+    border-radius: 8px;
+    background: #f0f7fb;
+    color: #435663;
+    font-size: 12.5px;
+    font-weight: 400;
+    line-height: 1.45;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.15);
+}
+.mevaz-code-help:hover .mevaz-help-text,
+.mevaz-code-help:focus-within .mevaz-help-text { display: block; }
+
+.mevaz-model-explanations {
+    margin: 12px 0 16px;
+    padding: 12px 14px;
+    border: 1px solid #d8e7ef;
+    border-radius: 8px;
+    background-color: #f0f7fb;
+    color: #435663;
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+.mevaz-model-explanations p {
+    margin: 0 0 8px;
+}
+
+.mevaz-model-explanations p:last-child {
+    margin-bottom: 0;
+}
+
 /* Aviso de execucao: destaque central, inclusive em telas pequenas. */
 .shiny-notification:has(.shiny-progress-notification) {
     position: fixed;

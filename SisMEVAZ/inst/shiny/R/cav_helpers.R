@@ -32,6 +32,20 @@ ensure_spillway_cota_in_cav <- function(df, cota_sang) {
   invisible(TRUE)
 }
 
+# Capacidade da linha cadastrada na CAV, sem interpolar volumes.
+cav_capacity_hm3 <- function(df, cota_sang) {
+  ensure_spillway_cota_in_cav(df, cota_sang)
+  matches <- which(.isclose(df$COTA, cota_sang))
+  # Prefere a cota exata quando houver cotas proximas dentro da tolerancia.
+  distance <- abs(df$COTA[matches] - cota_sang)
+  matches <- matches[distance == min(distance)]
+  volumes <- unique(df$VOLUME_M3[matches])
+  if (length(volumes) != 1L || !is.finite(volumes) || volumes < 0) {
+    stop("A cota do sangradouro deve corresponder a um único volume válido na CAV.")
+  }
+  volumes / 1e6
+}
+
 # ---- backfill_cota_vert_in_dados_novos: preenche COTA_VERT_M no arquivo transposto ----
 backfill_cota_vert_in_dados_novos <- function(codigo, cota_sang) {
   if (is.null(cota_sang) || identical(trimws(as.character(cota_sang)), "")) return(invisible())
